@@ -156,12 +156,25 @@
                 <div class="px-1 text-sm leading-relaxed whitespace-pre-wrap break-words"
                      v-html="renderContent(m.content || '')">
                 </div>
-                <div v-if="m.tool_calls && m.tool_calls.length" class="flex flex-wrap gap-1 mt-2">
-                  <span v-for="tc in m.tool_calls" :key="tc.id || tc.call_id"
-                        class="text-[11px] bg-[#1c2333] border border-border rounded-md px-2 py-0.5 text-muted flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-                    {{ tc.function?.name || tc.name || 'tool' }}
-                  </span>
+                <!-- Tool chain -->
+                <div v-if="m.tool_calls && m.tool_calls.length" class="flex flex-wrap items-center gap-0.5 mt-2">
+                  <template v-for="(tc, tci) in m.tool_calls" :key="tc.id || tc.call_id || tci">
+                    <span class="text-muted/40 text-[10px] mx-0.5" v-if="tci > 0">›</span>
+                    <div class="group relative inline-flex">
+                      <span class="text-[11px] bg-[#1c2333] border border-border rounded-md px-2 py-0.5 text-muted cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-[#c9d1d9]">
+                        <span class="text-muted/60">{{ tc.function?.name || tc.name || 'tool' }}</span>
+                        <span v-if="_toolArgPreview(tc)" class="text-muted/40 ml-1">{{ _toolArgPreview(tc) }}</span>
+                      </span>
+                      <!-- Hover popover -->
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-lg bg-[#0d1117] border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto">
+                        <div class="font-semibold text-accent mb-1 text-[11px]">{{ tc.function?.name || tc.name || 'tool' }}</div>
+                        <div v-if="tc.function?.arguments" class="text-muted mb-2">
+                          <pre class="!bg-transparent !border-0 !p-0 !m-0 text-[10px] leading-relaxed">{{ _prettyJson(tc.function.arguments) }}</pre>
+                        </div>
+                        <div class="text-muted/60 text-[10px] italic">Tool call — hover away to close</div>
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
@@ -318,14 +331,23 @@ export default {
     _isSystemMsg(m) {
       if (!m || !m.content) return false
       const c = m.content.trim()
-      // Messages injected by the agent itself (curator, skill updates, etc.)
-      // carry role='user' but are not written by the human. No explicit
-      // metadata field distinguishes them — detection is content-based.
       return c.startsWith('[IMPORTANT:')
         || c.startsWith('Review the conversation above')
         || c.startsWith('Review the conversation above and consider')
         || c.startsWith('System:')
         || c === '[SILENT]'
+    },
+    _toolArgPreview(tc) {
+      try {
+        const args = JSON.parse(tc.function?.arguments || '{}')
+        // Pick a short identifying value from args
+        const val = Object.values(args).find(v => typeof v === 'string' && v.length < 40)
+        return val || ''
+      } catch { return '' }
+    },
+    _prettyJson(str) {
+      try { return JSON.stringify(JSON.parse(str), null, 2) }
+      catch { return str || '' }
     },
     newChat() {
       this.currentSessionId = null
