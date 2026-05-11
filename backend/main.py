@@ -13,7 +13,7 @@ import uvicorn
 app = FastAPI(title="Hermes Thin Client")
 
 HTML = """<!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -41,8 +41,8 @@ HTML = """<!DOCTYPE html>
 <body>
 <div class="card">
   <h1>Hermes Thin Client</h1>
-  <p>Cliente ligero para Hermes Agent</p>
-  <div class="status" id="status">Conectando…</div>
+  <p>Lightweight web client for Hermes Agent</p>
+  <div class="status" id="status">Connecting…</div>
 </div>
 <script>
 fetch('/api/ping')

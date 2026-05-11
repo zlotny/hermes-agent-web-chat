@@ -1,6 +1,7 @@
 # hermes-agent-thin-client
 
-Cliente web ligero para Hermes Agent. Sustituye al dashboard oficial con una UI mobile-first, sin Node.js/TUI, sin exponer puertos de Hermes.
+Lightweight web client for Hermes Agent. Replaces the official dashboard with a
+mobile-first UI, no Node.js/TUI overhead, no Hermes ports exposed.
 
 ## Dev
 
@@ -12,7 +13,6 @@ cd backend && pip install -r requirements.txt && python main.py
 
 ```bash
 docker run -d --name hermes-thin-ndrs-es --restart unless-stopped \
-  --network host \
   -l traefik.enable=true \
   -l traefik.frontend.rule=Host:hermes.ndrs.es \
   -l traefik.port=8000 \
