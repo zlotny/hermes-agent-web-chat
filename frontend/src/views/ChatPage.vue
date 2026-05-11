@@ -14,7 +14,7 @@
           <div class="s-title">{{ s.title }}</div>
           <div class="s-meta">
             <span>{{ s.message_count }} msgs</span>
-            <span v-if="s.model">{{ s.model }}</span>
+            <span v-if="s.model" class="model-badge">{{ shortModel(s.model) }}</span>
           </div>
         </div>
       </div>
@@ -23,16 +23,28 @@
     <!-- Main chat -->
     <main class="main">
       <div class="messages" ref="messagesRef">
-        <div v-if="!messages.length" class="empty-state">
+        <div v-if="!chatMessages.length" class="empty-state">
           <h1>Hermes</h1>
           <p>Type a message below to start a conversation.</p>
         </div>
-        <div v-for="(m, i) in messages" :key="i"
-             :class="['msg', m.role === 'user' ? 'user' : 'assistant']">
-          <div class="role">{{ m.role === 'user' ? 'You' : 'Hermes' }}</div>
-          <div class="bubble" v-html="renderContent(m.content || '')"></div>
-        </div>
-        <div v-if="loading" class="typing">Thinking...</div>
+        <template v-for="(m, i) in chatMessages" :key="i">
+          <!-- User message -->
+          <div v-if="m.role === 'user'" class="msg user">
+            <div class="role">You</div>
+            <div class="bubble">{{ m.content }}</div>
+          </div>
+          <!-- Assistant response -->
+          <div v-if="m.role === 'assistant'" class="msg assistant">
+            <div class="role">Hermes</div>
+            <div class="bubble" v-html="renderContent(m.content || '')"></div>
+            <div v-if="m.tool_calls && m.tool_calls.length" class="tool-chips">
+              <span v-for="tc in m.tool_calls" :key="tc.id || tc.call_id" class="tool-chip">
+                ⚡ {{ tc.function?.name || tc.name || 'tool' }}
+              </span>
+            </div>
+          </div>
+        </template>
+        <div v-if="loadingSessions" class="typing">Loading session...</div>
         <div v-if="loadError" class="error-msg">{{ loadError }}</div>
       </div>
 
@@ -54,16 +66,21 @@ export default {
     return {
       sessions: [],
       currentSessionId: null,
-      messages: [],
+      allMessages: [],
       inputText: '',
-      loading: false,
+      loadingSessions: false,
       sending: false,
       sidebarError: '',
       loadError: '',
     }
   },
+  computed: {
+    // Filter out tool messages and only show user + assistant
+    chatMessages() {
+      return this.allMessages.filter(m => m.role === 'user' || m.role === 'assistant')
+    }
+  },
   async mounted() {
-    // Check auth — if API returns 401, redirect to login
     const ok = await this.checkAuth()
     if (ok) this.loadSessions()
   },
@@ -93,31 +110,36 @@ export default {
     async loadSession(id) {
       this.currentSessionId = id
       this.loadError = ''
-      this.loading = true
+      this.loadingSessions = true
       try {
         const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await res.text())
         const data = await res.json()
-        this.messages = data.messages || []
+        this.allMessages = data.messages || []
       } catch (e) {
         this.loadError = 'Error: ' + e.message
-        this.messages = []
+        this.allMessages = []
       } finally {
-        this.loading = false
+        this.loadingSessions = false
       }
     },
     newChat() {
       this.currentSessionId = null
-      this.messages = []
+      this.allMessages = []
       this.loadError = ''
+    },
+    shortModel(model) {
+      if (!model) return ''
+      const parts = model.split('/')
+      return parts[parts.length - 1] || model
     },
     renderContent(text) {
       if (!text) return ''
-      // Code blocks
+      // Code blocks: ```lang\ncode```
       let html = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      // Inline code
+      // Inline code: `text`
       html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-      // Bold
+      // Bold: **text**
       html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       // Paragraphs
       html = html.replace(/\n\n/g, '</p><p>')
@@ -127,8 +149,8 @@ export default {
     sendMessage() {
       if (!this.inputText.trim() || this.sending) return
       // TODO: connect to AIAgent
-      this.messages.push({ role: 'user', content: this.inputText })
-      this.messages.push({ role: 'assistant', content: 'Chat not yet connected to Hermes Agent.' })
+      this.allMessages.push({ role: 'user', content: this.inputText })
+      this.allMessages.push({ role: 'assistant', content: 'Chat not yet connected to Hermes Agent.' })
       this.inputText = ''
     },
     resizeTextarea(e) {
@@ -174,8 +196,11 @@ export default {
   font-size: 0.82rem; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; margin-bottom: 2px;
 }
-.s-meta { font-size: 0.72rem; color: #8b949e; }
-.s-meta span { margin-right: 8px; }
+.s-meta { font-size: 0.72rem; color: #8b949e; display: flex; align-items: center; gap: 6px; }
+.model-badge {
+  background: #0d1117; border: 1px solid #30363d;
+  border-radius: 3px; padding: 0 4px; font-size: 0.68rem;
+}
 
 /* Main */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -194,18 +219,15 @@ export default {
   font-size: 0.75rem; font-weight: 600; color: #8b949e;
   margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;
 }
-.msg .bubble {
-  padding: 12px 16px; border-radius: 8px;
-  line-height: 1.6; font-size: 0.9rem;
-  white-space: pre-wrap; word-wrap: break-word;
-}
 .msg.user .bubble {
-  background: #1f6feb;
-  border-bottom-right-radius: 2px;
+  background: #1f6feb; padding: 12px 16px; border-radius: 8px;
+  border-bottom-right-radius: 2px; line-height: 1.6; font-size: 0.9rem;
+  white-space: pre-wrap; word-wrap: break-word; display: inline-block;
 }
 .msg.assistant .bubble {
-  background: #161b22; border: 1px solid #30363d;
-  border-bottom-left-radius: 2px;
+  background: #161b22; border: 1px solid #30363d; padding: 12px 16px;
+  border-radius: 8px; border-bottom-left-radius: 2px;
+  line-height: 1.6; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word;
 }
 .msg .bubble pre {
   background: #0d1117; border: 1px solid #30363d;
@@ -217,6 +239,17 @@ export default {
   font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
   background: #0d1117; padding: 1px 4px; border-radius: 3px;
 }
+
+/* Tool chips */
+.tool-chips {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+}
+.tool-chip {
+  font-size: 0.72rem; background: #1c2333;
+  border: 1px solid #30363d; border-radius: 4px;
+  padding: 2px 8px; color: #8b949e;
+}
+
 .typing { color: #8b949e; font-size: 0.85rem; font-style: italic; padding: 8px 0; }
 
 /* Input */
