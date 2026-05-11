@@ -6,16 +6,29 @@
         <button class="btn-new" @click="newChat">+ New</button>
       </div>
       <div class="session-list">
-        <div v-if="sidebarError" class="error-msg">{{ sidebarError }}</div>
-        <div v-for="s in sessions" :key="s.id"
-             :class="['session-item', { active: s.id === currentSessionId }]"
-             @click="loadSession(s.id)">
-          <div class="s-title">{{ s.title }}</div>
-          <div class="s-meta">
-            <span>{{ s.message_count }} msgs</span>
-            <span v-if="s.model" class="model-badge">{{ shortModel(s.model) }}</span>
+        <!-- Skeleton loading -->
+        <div v-if="loadingSessions" class="skel-list">
+          <div v-for="n in 5" :key="n" class="skel-item">
+            <div class="skel-line skel-title"></div>
+            <div class="skel-line skel-meta"></div>
           </div>
         </div>
+        <div v-else-if="sidebarError" class="error-msg">{{ sidebarError }}</div>
+        <template v-else>
+          <div v-for="s in visibleSessions" :key="s.id"
+               :class="['session-item', { active: s.id === currentSessionId }]"
+               @click="loadSession(s.id)">
+            <div class="s-title">{{ s.title }}</div>
+            <div class="s-meta">
+              <span>{{ s.message_count }} msgs</span>
+              <span v-if="s.model" class="model-badge">{{ shortModel(s.model) }}</span>
+            </div>
+          </div>
+          <button v-if="allSessions.length > visibleSessions.length" class="load-more-btn"
+                  @click="showAllSessions">
+            Show all ({{ allSessions.length }})
+          </button>
+        </template>
       </div>
     </aside>
 
@@ -40,7 +53,6 @@
             </div>
           </div>
         </template>
-        <!-- Streaming message -->
         <div v-if="streamingMsg" class="msg assistant">
           <div class="role">Hermes</div>
           <div class="bubble" v-html="renderContent(streamingMsg)"></div>
@@ -65,20 +77,25 @@
 export default {
   data() {
     return {
-      sessions: [],
+      allSessions: [],
       currentSessionId: null,
       allMessages: [],
       inputText: '',
+      loadingSessions: true,
       sending: false,
       sidebarError: '',
       loadError: '',
       streamingMsg: '',
       streamingTool: '',
+      showAll: false,
     }
   },
   computed: {
     chatMessages() {
       return this.allMessages.filter(m => m.role === 'user' || m.role === 'assistant')
+    },
+    visibleSessions() {
+      return this.showAll ? this.allSessions : this.allSessions.slice(0, 5)
     }
   },
   async mounted() {
@@ -95,7 +112,7 @@ export default {
     },
     async checkAuth() {
       try {
-        const res = await fetch('/api/sessions', { credentials: 'same-origin' })
+        const res = await fetch('/api/sessions?limit=5', { credentials: 'same-origin' })
         if (res.status === 401) {
           this.$router.push('/login')
           return false
@@ -107,10 +124,24 @@ export default {
     },
     async loadSessions() {
       this.sidebarError = ''
+      this.loadingSessions = true
+      try {
+        const res = await fetch('/api/sessions?limit=5', { credentials: 'same-origin' })
+        if (!res.ok) throw new Error(await res.text())
+        this.allSessions = await res.json()
+      } catch (e) {
+        this.sidebarError = 'Failed to load sessions: ' + e.message
+      } finally {
+        this.loadingSessions = false
+      }
+    },
+    async showAllSessions() {
+      this.showAll = true
+      if (this.allSessions.length <= 5) return
       try {
         const res = await fetch('/api/sessions', { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await res.text())
-        this.sessions = await res.json()
+        this.allSessions = await res.json()
       } catch (e) {
         this.sidebarError = 'Failed to load sessions: ' + e.message
       }
@@ -161,8 +192,6 @@ export default {
       const text = this.inputText.trim()
       this.inputText = ''
       this.loadError = ''
-
-      // Add user message
       this.allMessages.push({ role: 'user', content: text })
       this.streamingMsg = ''
       this.streamingTool = ''
@@ -200,29 +229,21 @@ export default {
             if (!line.startsWith('data: ')) continue
             try {
               const data = JSON.parse(line.slice(6))
-              if (data.token) {
-                this.streamingMsg += data.token
-              }
+              if (data.token) this.streamingMsg += data.token
               if (data.error) {
                 this.loadError = data.error
                 this.sending = false
               }
               if (data.done) {
-                // Move streaming message to permananent messages
                 if (this.streamingMsg) {
-                  this.allMessages.push({
-                    role: 'assistant',
-                    content: this.streamingMsg,
-                  })
+                  this.allMessages.push({ role: 'assistant', content: this.streamingMsg })
                 }
                 this.currentSessionId = data.session_id || this.currentSessionId
                 this.streamingMsg = ''
                 this.sending = false
-                this.loadSessions() // refresh sidebar
+                this.loadSessions()
               }
-            } catch (e) {
-              // skip parse errors on partial lines
-            }
+            } catch (e) { /* skip partial parse errors */ }
           }
         }
       } catch (e) {
@@ -262,6 +283,22 @@ export default {
 }
 .btn-new:hover { background: #79c0ff; }
 .session-list { flex: 1; overflow-y: auto; padding: 8px; }
+
+/* Skeleton */
+.skel-item { padding: 10px 12px; }
+.skel-line {
+  height: 12px; border-radius: 4px;
+  background: linear-gradient(90deg, #1c2333 25%, #2d3a52 50%, #1c2333 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.5s infinite;
+}
+.skel-title { width: 85%; margin-bottom: 6px; }
+.skel-meta { width: 45%; height: 8px; }
+@keyframes skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .session-item {
   padding: 10px 12px; border-radius: 6px; cursor: pointer;
   margin-bottom: 2px;
@@ -277,15 +314,20 @@ export default {
   background: #0d1117; border: 1px solid #30363d;
   border-radius: 3px; padding: 0 4px; font-size: 0.68rem;
 }
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.load-more-btn {
+  width: 100%; padding: 8px; margin-top: 4px;
+  background: transparent; border: 1px solid #30363d; border-radius: 6px;
+  color: #8b949e; font-size: 0.78rem; cursor: pointer;
+}
+.load-more-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+
 .messages {
   flex: 1; overflow-y: auto; padding: 24px 16px;
   max-width: 800px; margin: 0 auto; width: 100%;
 }
 .empty-state {
   display: flex; flex-direction: column; align-items: center;
-  justify-content: center; height: 100%; text-align: center;
-  color: #8b949e;
+  justify-content: center; height: 100%; text-align: center; color: #8b949e;
 }
 .empty-state h1 { font-size: 1.5rem; margin-bottom: 8px; color: #c9d1d9; }
 .msg { margin-bottom: 20px; }
@@ -306,8 +348,7 @@ export default {
 .msg .bubble pre {
   background: #0d1117; border: 1px solid #30363d;
   border-radius: 4px; padding: 8px 12px; overflow-x: auto;
-  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
-  margin: 8px 0;
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; margin: 8px 0;
 }
 .msg .bubble code {
   font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;

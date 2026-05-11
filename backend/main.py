@@ -148,8 +148,12 @@ def _get_session(session_id: str) -> Optional[dict]:
 
 
 @app.get("/api/sessions")
-async def list_sessions():
-    return _list_sessions()
+async def list_sessions(limit: int = 0):
+    """List sessions. Pass ?limit=N to get only the N most recent."""
+    all_sessions = _list_sessions()
+    if limit > 0:
+        return all_sessions[:limit]
+    return all_sessions
 
 
 @app.get("/api/sessions/{session_id}")
