@@ -37,15 +37,17 @@ def _check_auth(request: Request) -> Optional[Response]:
     if not auth.startswith("Basic "):
         return Response(
             status_code=401,
+            content="Unauthorized",
             headers={"WWW-Authenticate": 'Basic realm="Hermes Thin Client"'},
+            media_type="text/plain",
         )
     try:
         decoded = base64.b64decode(auth.removeprefix("Basic ")).decode()
         user, pwd = decoded.split(":", 1)
     except Exception:
-        return Response(status_code=401)
+        return Response(status_code=401, content="Unauthorized", media_type="text/plain")
     if user != AUTH_USER or pwd != AUTH_PASS:
-        return Response(status_code=401)
+        return Response(status_code=401, content="Unauthorized", media_type="text/plain")
     return None
 
 
