@@ -89,7 +89,7 @@
     </button>
 
     <!-- Main -->
-    <main class="flex-1 flex flex-col min-w-0 relative">
+    <main class="flex-1 flex flex-col min-w-0 relative overflow-hidden">
       <!-- Mobile top bar -->
       <div v-if="!isDesktop" class="flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
         <button @click="sidebarOpen = true" class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted transition-colors">
@@ -128,7 +128,7 @@
         </div>
 
         <!-- Messages -->
-        <div v-else class="max-w-[800px] mx-auto px-4 pt-6 pb-44 space-y-5">
+        <div v-else class="max-w-[800px] mx-auto px-4 pt-6 pb-28 space-y-5">
           <template v-for="(g, gi) in displayGroups" :key="gi">
             <!-- User message -->
             <div v-if="g.type === 'message' && g.msg.role === 'user' && !_isSystemMsg(g.msg)" class="flex justify-end">
@@ -225,9 +225,9 @@
 
       <!-- Floating input (non-empty) -->
       <div v-if="chatMessages.length || streamingMsg"
-           class="sticky bottom-0 left-0 right-0 bg-gradient-to-t from-[#0d1117] via-[#0d1117]/95 to-transparent pt-6 pb-4 px-4">
-        <div class="max-w-[800px] mx-auto">
-          <div class="flex gap-2 bg-surface border border-border rounded-xl p-2 shadow-lg shadow-black/30">
+           class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0d1117]/90 via-[#0d1117]/60 to-transparent pt-8 pb-4 px-4 pointer-events-none">
+        <div class="max-w-[800px] mx-auto pointer-events-auto">
+          <div class="flex gap-2 bg-surface/95 backdrop-blur-sm border border-border/80 rounded-xl p-2 shadow-lg shadow-black/40">
             <textarea v-model="inputText" rows="1" placeholder="Type a message..."
               @keydown.enter.exact.prevent="sendMessage"
               @input="resizeTextarea"
