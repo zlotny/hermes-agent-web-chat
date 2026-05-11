@@ -99,7 +99,21 @@ async def api_logout(request: Request):
 # ---------------------------------------------------------------------------
 # Session API
 # ---------------------------------------------------------------------------
-def _list_sessions() -> list[dict]:
+def _is_cron_session(data: dict) -> bool:
+    """Detect if a session belongs to a cron job."""
+    sid = data.get("session_id", "")
+    source = data.get("source") or data.get("platform", "")
+    if sid.startswith("cron_") or source == "cron":
+        return True
+    msgs = data.get("messages", [])
+    if msgs:
+        first_content = msgs[0].get("content", "")
+        if "[IMPORTANT: You are running as a scheduled cron job" in first_content:
+            return True
+    return False
+
+
+def _list_sessions(show_crons: bool = False) -> list[dict]:
     sessions = []
     pattern = str(SESSIONS_DIR / "session_*.json")
     for path in sorted(glob.glob(pattern)):
@@ -107,6 +121,8 @@ def _list_sessions() -> list[dict]:
             with open(path) as f:
                 data = json.load(f)
         except Exception:
+            continue
+        if not show_crons and _is_cron_session(data):
             continue
         title = data.get("session_id", "Untitled")
         msgs = data.get("messages", [])
@@ -124,6 +140,7 @@ def _list_sessions() -> list[dict]:
             "message_count": data.get("message_count", len(msgs)),
             "last_updated": data.get("last_updated", ""),
             "started_at": data.get("session_start", ""),
+            "is_cron": _is_cron_session(data),
         })
     sessions.sort(key=lambda s: s["last_updated"], reverse=True)
     seen_titles: set[str] = set()
@@ -148,10 +165,9 @@ def _get_session(session_id: str) -> Optional[dict]:
 
 
 @app.get("/api/sessions")
-async def list_sessions(limit: int = 0):
-    """List sessions. Pass ?limit=N to get only the N most recent.
-    Always returns {"sessions": [...], "total": N} for pagination."""
-    all_sessions = _list_sessions()
+async def list_sessions(limit: int = 0, show_crons: bool = False):
+    """List sessions. Pass ?limit=N and/or ?show_crons=true."""
+    all_sessions = _list_sessions(show_crons=show_crons)
     total = len(all_sessions)
     if limit > 0:
         return {"sessions": all_sessions[:limit], "total": total}
