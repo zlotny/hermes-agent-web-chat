@@ -44,10 +44,10 @@
                 <span v-if="s.model" class="bg-[#0d1117] border border-border rounded px-1 text-[10px]">{{ shortModel(s.model) }}</span>
               </div>
             </div>
-            <button v-if="allSessions.length > visibleSessions.length"
+            <button v-if="!showAll && totalSessions > visibleSessions.length"
                     @click="showAllSessions"
                     class="w-full py-2 mt-1 text-xs text-muted border border-border rounded-md bg-transparent hover:border-accent hover:text-accent transition-colors">
-              Show all ({{ allSessions.length }})
+            Show all ({{ totalSessions }})
             </button>
           </template>
         </div>
@@ -187,6 +187,7 @@ export default {
       streamingMsg: '',
       streamingTool: '',
       showAll: false,
+      totalSessions: 0,
       sidebarOpen: true,
       isDesktop: true,
     }
@@ -237,14 +238,23 @@ export default {
       this.sidebarError = ''
       this.loadingSessions = true
       try {
-        const res = await fetch('/api/sessions', { credentials: 'same-origin' })
+        const res = await fetch('/api/sessions?limit=5', { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await res.text())
-        this.allSessions = await res.json()
+        const data = await res.json()
+        this.allSessions = data.sessions || []
+        this.totalSessions = data.total || 0
       } catch (e) { this.sidebarError = 'Failed: ' + e.message }
       finally { this.loadingSessions = false }
     },
     async showAllSessions() {
       this.showAll = true
+      if (this.allSessions.length >= this.totalSessions) return
+      try {
+        const res = await fetch('/api/sessions', { credentials: 'same-origin' })
+        if (!res.ok) throw new Error(await res.text())
+        const data = await res.json()
+        this.allSessions = data.sessions || []
+      } catch (e) { this.sidebarError = 'Failed: ' + e.message }
     },
     async loadSession(id) {
       this.currentSessionId = id
