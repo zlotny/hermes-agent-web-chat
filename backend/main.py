@@ -454,8 +454,10 @@ async function loadSessions() {
   if (loadingSessions) return;
   loadingSessions = true;
   try {
-    const res = await fetch('/api/sessions');
+    const res = await fetch('/api/sessions', { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 50));
     const sessions = await res.json();
+    if (!Array.isArray(sessions)) throw new Error('Unexpected response');
     const list = document.getElementById('sessionList');
     list.innerHTML = sessions.map(s => {
       const lastUp = s.last_updated ? new Date(s.last_updated + 'Z').toLocaleString() : '';
@@ -465,7 +467,7 @@ async function loadSessions() {
         '</div>';
     }).join('');
   } catch (e) {
-    console.error('Failed to load sessions', e);
+    document.getElementById('sessionList').innerHTML = '<div style="padding:12px;color:#f85149;font-size:0.8rem">Failed to load sessions: ' + e.message + '</div>';
   } finally {
     loadingSessions = false;
   }
@@ -479,14 +481,15 @@ async function loadSession(id) {
   msgsDiv.innerHTML = '<div class="typing">Loading…</div>';
 
   try {
-    const res = await fetch('/api/sessions/' + encodeURIComponent(id));
+    const res = await fetch('/api/sessions/' + encodeURIComponent(id), { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 50));
     const data = await res.json();
     renderMessages(data.messages || []);
     document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
     const item = document.querySelector('.session-item[data-session-id="' + id + '"]');
     if (item) item.classList.add('active');
   } catch (e) {
-    msgsDiv.innerHTML = '<div class="typing">Failed to load session</div>';
+    msgsDiv.innerHTML = '<div style="padding:20px;color:#f85149;font-size:0.9rem">Error: ' + e.message + '</div>';
   }
   loadSessions(); // refresh sidebar
 }
@@ -593,7 +596,6 @@ async def api_login(request: Request):
         raise HTTPException(status_code=401, detail="Invalid password")
     token = secrets.token_urlsafe(32)
     _session_tokens[token] = datetime.utcnow() + _TOKEN_EXPIRY
-    is_secure = request.url.scheme == "https"
     resp = JSONResponse(content={"ok": True})
     resp.set_cookie(
         key="session",
@@ -601,7 +603,7 @@ async def api_login(request: Request):
         max_age=int(_TOKEN_EXPIRY.total_seconds()),
         httponly=True,
         samesite="lax",
-        secure=is_secure,
+        secure=False,
     )
     return resp
 
