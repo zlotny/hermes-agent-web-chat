@@ -318,7 +318,14 @@ export default {
     _isSystemMsg(m) {
       if (!m || !m.content) return false
       const c = m.content.trim()
-      return c.startsWith('[IMPORTANT:') || c.startsWith('Review the conversation above')
+      // Messages injected by the agent itself (curator, skill updates, etc.)
+      // carry role='user' but are not written by the human. No explicit
+      // metadata field distinguishes them — detection is content-based.
+      return c.startsWith('[IMPORTANT:')
+        || c.startsWith('Review the conversation above')
+        || c.startsWith('Review the conversation above and consider')
+        || c.startsWith('System:')
+        || c === '[SILENT]'
     },
     newChat() {
       this.currentSessionId = null
