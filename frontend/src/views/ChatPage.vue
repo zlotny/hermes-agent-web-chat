@@ -129,49 +129,73 @@
 
         <!-- Messages -->
         <div v-else class="max-w-[800px] mx-auto px-4 pt-6 pb-44 space-y-5">
-          <template v-for="(m, i) in chatMessages" :key="i">
-            <div v-if="m.role === 'user' && !_isSystemMsg(m)" class="flex justify-end">
+          <template v-for="(g, gi) in displayGroups" :key="gi">
+            <!-- User message -->
+            <div v-if="g.type === 'message' && g.msg.role === 'user' && !_isSystemMsg(g.msg)" class="flex justify-end">
               <div class="max-w-[75%]">
                 <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 text-right">You</div>
                 <div class="bg-accent/10 border border-accent/20 px-4 py-3 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words">
-                  {{ m.content }}
+                  {{ g.msg.content }}
                 </div>
               </div>
             </div>
             <!-- System message -->
-            <div v-if="m.role === 'user' && _isSystemMsg(m)" class="flex justify-center">
+            <div v-if="g.type === 'message' && g.msg.role === 'user' && _isSystemMsg(g.msg)" class="flex justify-center">
               <div class="max-w-[90%]">
                 <div class="text-[11px] font-semibold text-[#d29922]/80 uppercase tracking-wider mb-1 text-center">System</div>
                 <div class="bg-[#d29922]/5 border border-[#d29922]/20 px-4 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d29922]/70">
-                  {{ m.content }}
+                  {{ g.msg.content }}
                 </div>
               </div>
             </div>
-            <div v-if="m.role === 'assistant'" class="flex justify-start">
+            <!-- Assistant message -->
+            <div v-if="g.type === 'message' && g.msg.role === 'assistant'" class="flex justify-start">
               <div class="max-w-[85%]">
                 <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M12 2a10 10 0 0 1 10 10c0 5-4 8-10 8-2.5 0-4.8-.8-6.7-2.2L2 22l1.8-4.5A9.8 9.8 0 0 1 2 12 10 10 0 0 1 12 2z"/></svg>
                   Hermes
                 </div>
                 <div class="px-1 text-sm leading-relaxed whitespace-pre-wrap break-words"
-                     v-html="renderContent(m.content || '')">
+                     v-html="renderContent(g.msg.content || '')">
                 </div>
-                <!-- Tool chain -->
-                <div v-if="m.tool_calls && m.tool_calls.length" class="flex flex-wrap items-center gap-0.5 mt-2">
-                  <template v-for="(tc, tci) in m.tool_calls" :key="tc.id || tc.call_id || tci">
+                <!-- Tool chain (within this message) -->
+                <div v-if="g.msg.tool_calls && g.msg.tool_calls.length" class="flex flex-wrap items-center gap-0.5 mt-2">
+                  <template v-for="(tc, tci) in g.msg.tool_calls" :key="tc.id || tc.call_id || tci">
                     <span class="text-muted/40 text-[10px] mx-0.5" v-if="tci > 0">›</span>
                     <div class="group relative inline-flex">
                       <span class="text-[11px] bg-[#1c2333] border border-border rounded-md px-2 py-0.5 text-muted cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-[#c9d1d9]">
                         <span class="text-muted/60">{{ tc.function?.name || tc.name || 'tool' }}</span>
                         <span v-if="_toolArgPreview(tc)" class="text-muted/40 ml-1">{{ _toolArgPreview(tc) }}</span>
                       </span>
-                      <!-- Hover popover -->
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-lg bg-[#0d1117] border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto">
+                      <div class="absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-280px-4rem)] p-3 rounded-lg bg-[#0d1117] border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto">
                         <div class="font-semibold text-accent mb-1 text-[11px]">{{ tc.function?.name || tc.name || 'tool' }}</div>
                         <div v-if="tc.function?.arguments" class="text-muted mb-2">
                           <pre class="!bg-transparent !border-0 !p-0 !m-0 text-[10px] leading-relaxed">{{ _prettyJson(tc.function.arguments) }}</pre>
                         </div>
-                        <div class="text-muted/60 text-[10px] italic">Tool call — hover away to close</div>
+                        <div class="text-muted/60 text-[10px] italic">Tool call</div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+            <!-- Merged tool chain (consecutive tool-only messages) -->
+            <div v-if="g.type === 'toolchain'" class="flex justify-start -mt-3 mb-2">
+              <div class="max-w-[85%]">
+                <div class="flex flex-wrap items-center gap-0.5">
+                  <template v-for="(tc, tci) in g.tool_calls" :key="tc.id || tc.call_id || tci">
+                    <span class="text-muted/40 text-[10px] mx-0.5" v-if="tci > 0">›</span>
+                    <div class="group relative inline-flex">
+                      <span class="text-[11px] bg-[#1c2333]/60 border border-border/50 rounded-md px-2 py-0.5 text-muted/60 cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-[#c9d1d9]">
+                        <span class="text-muted/40">{{ tc.function?.name || tc.name || 'tool' }}</span>
+                        <span v-if="_toolArgPreview(tc)" class="text-muted/30 ml-1">{{ _toolArgPreview(tc) }}</span>
+                      </span>
+                      <div class="absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-280px-4rem)] p-3 rounded-lg bg-[#0d1117] border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto">
+                        <div class="font-semibold text-accent mb-1 text-[11px]">{{ tc.function?.name || tc.name || 'tool' }}</div>
+                        <div v-if="tc.function?.arguments" class="text-muted mb-2">
+                          <pre class="!bg-transparent !border-0 !p-0 !m-0 text-[10px] leading-relaxed">{{ _prettyJson(tc.function.arguments) }}</pre>
+                        </div>
+                        <div class="text-muted/60 text-[10px] italic">Tool call</div>
                       </div>
                     </div>
                   </template>
@@ -251,6 +275,24 @@ export default {
         if (m.role === 'user' && this._isSystemMsg(m) && !this.showSystemMessages) return false
         return true
       })
+    },
+    // Group consecutive tool-only assistant messages into a single chain
+    displayGroups() {
+      const groups = []
+      for (const m of this.chatMessages) {
+        const isToolOnly = m.role === 'assistant' && (!m.content || !m.content.trim()) && m.tool_calls?.length
+        if (isToolOnly) {
+          const last = groups[groups.length - 1]
+          if (last && last.type === 'toolchain') {
+            last.tool_calls.push(...m.tool_calls)
+          } else {
+            groups.push({ type: 'toolchain', tool_calls: [...m.tool_calls] })
+          }
+        } else {
+          groups.push({ type: 'message', msg: m })
+        }
+      }
+      return groups
     },
     visibleSessions() {
       return this.showAll ? this.allSessions : this.allSessions.slice(0, 5)
