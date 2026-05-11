@@ -2,23 +2,22 @@ import json
 import os
 import sys
 import glob
+import hashlib
+import secrets
 import base64
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import uvicorn
 
 # ---------------------------------------------------------------------------
 # Hermes paths
 # ---------------------------------------------------------------------------
-# Session files location. Override via HERMES_SESSIONS_DIR env var when running
-# inside Docker (mount ~/.hermes/sessions to /data/sessions and set the var).
 SESSIONS_DIR = Path(os.getenv("HERMES_SESSIONS_DIR", os.path.expanduser("~/.hermes/sessions")))
 
-# Hermes venv (host dev only — Docker uses a different mechanism)
 HERMES_VENV = os.path.expanduser(
     "~/.hermes/hermes-agent/venv/lib/python3.11/site-packages"
 )
@@ -26,29 +25,94 @@ if os.path.isdir(HERMES_VENV):
     sys.path.insert(0, HERMES_VENV)
 
 # ---------------------------------------------------------------------------
-# Basic Auth
+# Simple password auth (cookie-based)
 # ---------------------------------------------------------------------------
-AUTH_USER = "ndrs"
-AUTH_PASS = "ndrspass"
+PASSWORD_HASH = hashlib.sha256(b"ndrspass").hexdigest()
+# In-memory session tokens -> expiry
+_session_tokens: dict[str, datetime] = {}
+_TOKEN_EXPIRY = timedelta(hours=24)
 
 
-def _check_auth(request: Request) -> Optional[Response]:
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Basic "):
-        return Response(
-            status_code=401,
-            content="Unauthorized",
-            headers={"WWW-Authenticate": 'Basic realm="Hermes Thin Client"'},
-            media_type="text/plain",
-        )
-    try:
-        decoded = base64.b64decode(auth.removeprefix("Basic ")).decode()
-        user, pwd = decoded.split(":", 1)
-    except Exception:
-        return Response(status_code=401, content="Unauthorized", media_type="text/plain")
-    if user != AUTH_USER or pwd != AUTH_PASS:
-        return Response(status_code=401, content="Unauthorized", media_type="text/plain")
-    return None
+def _check_session(request: Request) -> Optional[Response]:
+    """Return None if authenticated, or a redirect to /login."""
+    token = request.cookies.get("session")
+    if token and token in _session_tokens:
+        if _session_tokens[token] > datetime.utcnow():
+            return None
+        # Expired — clean up
+        del _session_tokens[token]
+    # If it's a fetch to /api/*, return 401 JSON instead of redirect
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    return RedirectResponse(url="/login")
+
+
+LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes — Login</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d1117; color: #c9d1d9;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+  }
+  .card {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 12px; padding: 2rem;
+    width: 340px;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 1.5rem; text-align: center; color: #58a6ff; }
+  label { font-size: 0.85rem; color: #8b949e; display: block; margin-bottom: 6px; }
+  input[type=password] {
+    width: 100%; padding: 10px 12px;
+    background: #0d1117; border: 1px solid #30363d;
+    border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;
+    outline: none; margin-bottom: 1rem;
+  }
+  input[type=password]:focus { border-color: #58a6ff; }
+  button {
+    width: 100%; padding: 10px;
+    background: #58a6ff; color: #fff;
+    border: none; border-radius: 6px; font-size: 0.9rem;
+    cursor: pointer; font-weight: 500;
+  }
+  button:hover { background: #79c0ff; }
+  .error { color: #f85149; font-size: 0.85rem; margin-bottom: 1rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Hermes</h1>
+  <div class="error" id="error"></div>
+  <form id="loginForm">
+    <label for="pwd">Password</label>
+    <input type="password" id="pwd" autofocus>
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+<script>
+document.getElementById('loginForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const pwd = document.getElementById('pwd').value;
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: pwd}),
+  });
+  if (res.ok) {
+    window.location.href = '/';
+  } else {
+    document.getElementById('error').textContent = 'Invalid password';
+  }
+};
+</script>
+</body>
+</html>"""
 
 
 # ---------------------------------------------------------------------------
@@ -59,11 +123,11 @@ app = FastAPI(title="Hermes Thin Client")
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    """Require basic auth on all routes."""
-    # Allow preflight / OPTIONS if needed
-    if request.method == "OPTIONS":
+    """Check session cookie on all routes except /login and /api/login."""
+    path = request.url.path
+    if path in ("/login", "/api/login") or request.method == "OPTIONS":
         return await call_next(request)
-    err = _check_auth(request)
+    err = _check_session(request)
     if err:
         return err
     return await call_next(request)
@@ -515,6 +579,32 @@ loadSessions();
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+@app.get("/login")
+async def login_page():
+    return HTMLResponse(LOGIN_HTML)
+
+
+@app.post("/api/login")
+async def api_login(request: Request):
+    body = await request.json()
+    pwd = body.get("password", "")
+    if hashlib.sha256(pwd.encode()).hexdigest() != PASSWORD_HASH:
+        raise HTTPException(status_code=401, detail="Invalid password")
+    token = secrets.token_urlsafe(32)
+    _session_tokens[token] = datetime.utcnow() + _TOKEN_EXPIRY
+    is_secure = request.url.scheme == "https"
+    resp = JSONResponse(content={"ok": True})
+    resp.set_cookie(
+        key="session",
+        value=token,
+        max_age=int(_TOKEN_EXPIRY.total_seconds()),
+        httponly=True,
+        samesite="lax",
+        secure=is_secure,
+    )
+    return resp
+
 
 @app.get("/")
 async def root():
