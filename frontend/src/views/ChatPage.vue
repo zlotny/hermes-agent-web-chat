@@ -190,6 +190,7 @@ export default {
       totalSessions: 0,
       sidebarOpen: true,
       isDesktop: true,
+      wasDesktop: true,
     }
   },
   computed: {
@@ -202,6 +203,7 @@ export default {
   },
   created() {
     this.isDesktop = window.innerWidth >= 1024
+    this.wasDesktop = this.isDesktop
     this.sidebarOpen = this.isDesktop
   },
   mounted() {
@@ -216,12 +218,10 @@ export default {
     onResize() {
       const desktop = window.innerWidth >= 1024
       this.isDesktop = desktop
-      if (desktop && !this.sidebarOpen) {
-        // Keep collapsed state on desktop if user manually closed it
-      } else if (!desktop && this.sidebarOpen) {
-        // Auto collapse on mobile — but only if user didn't explicitly open it
-        // this.sidebarOpen = false // uncomment to auto-close on mobile
-      }
+      // Auto-collapse when narrowing past breakpoint, auto-open when widening
+      if (this.wasDesktop && !desktop) this.sidebarOpen = false
+      if (!this.wasDesktop && desktop) this.sidebarOpen = true
+      this.wasDesktop = desktop
     },
     scrollToBottom() {
       const el = this.$refs.messagesRef
