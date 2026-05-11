@@ -4,13 +4,16 @@ import sys
 import glob
 import hashlib
 import secrets
+import queue as _queue
+import asyncio
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, AsyncGenerator
 
 from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 import uvicorn
 
 # ---------------------------------------------------------------------------
@@ -23,6 +26,10 @@ HERMES_VENV = os.path.expanduser(
 )
 if os.path.isdir(HERMES_VENV):
     sys.path.insert(0, HERMES_VENV)
+# Editable install: source code at HERMES_SRC or the repo root
+HERMES_SRC = os.getenv("HERMES_SRC", os.path.expanduser("~/.hermes/hermes-agent"))
+if os.path.isdir(HERMES_SRC):
+    sys.path.insert(0, HERMES_SRC)
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -52,18 +59,15 @@ def _check_session(request: Request) -> Optional[Response]:
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    # Public paths: login API, static assets, SPA shell
     if (path in ("/login", "/api/login", "/api/logout", "/favicon.ico")
         or path.startswith("/assets/")
         or request.method == "OPTIONS"):
         return await call_next(request)
-    # Everything under /api/ requires auth
     if path.startswith("/api/"):
         err = _check_session(request)
         if err:
             return err
         return await call_next(request)
-    # SPA routes: serve the app (auth handled client-side via /api/* calls)
     return await call_next(request)
 
 
@@ -76,14 +80,9 @@ async def api_login(request: Request):
     token = secrets.token_urlsafe(32)
     _session_tokens[token] = datetime.utcnow() + _TOKEN_EXPIRY
     resp = JSONResponse(content={"ok": True})
-    resp.set_cookie(
-        key="session",
-        value=token,
-        max_age=int(_TOKEN_EXPIRY.total_seconds()),
-        httponly=True,
-        samesite="lax",
-        secure=False,
-    )
+    resp.set_cookie(key="session", value=token,
+                    max_age=int(_TOKEN_EXPIRY.total_seconds()),
+                    httponly=True, samesite="lax", secure=False)
     return resp
 
 
@@ -126,9 +125,6 @@ def _list_sessions() -> list[dict]:
             "last_updated": data.get("last_updated", ""),
             "started_at": data.get("session_start", ""),
         })
-    # Group consecutive sessions with same title (same first user message).
-    # Hermes creates a new file on /new, cluttering the list with duplicates.
-    # Keep only the most recent session per unique topic.
     sessions.sort(key=lambda s: s["last_updated"], reverse=True)
     seen_titles: set[str] = set()
     deduped: list[dict] = []
@@ -166,6 +162,99 @@ async def get_session(session_id: str):
         "model": data.get("model"),
         "messages": data.get("messages", []),
     }
+
+
+# ---------------------------------------------------------------------------
+# Chat (AIAgent)
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    model: Optional[str] = None
+
+
+def _default_model() -> str:
+    """Read default model from Hermes config.yaml."""
+    import yaml
+    config_path = Path(os.getenv("HERMES_HOME", os.path.expanduser("~/.hermes"))) / "config.yaml"
+    try:
+        with open(config_path) as f:
+            cfg = yaml.safe_load(f)
+        if cfg and "model" in cfg:
+            return cfg["model"].get("default", "")
+    except Exception:
+        pass
+    return ""
+
+
+def _agent_is_available() -> bool:
+    """Check if AIAgent can be imported."""
+    try:
+        from run_agent import AIAgent
+        return True
+    except ImportError:
+        return False
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(req: ChatRequest):
+    if not _agent_is_available():
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Hermes Agent is not available in this environment. "
+                     "Mount the Hermes venv and config to enable chat."}
+        )
+
+    q: _queue.Queue = _queue.Queue()
+    loop = asyncio.get_event_loop()
+    result_holder = {}
+
+    def on_delta(delta: str) -> None:
+        """Called by AIAgent from a background thread."""
+        if delta is not None:
+            q.put_nowait(("token", delta))
+
+    async def run_agent():
+        try:
+            from run_agent import AIAgent
+
+            agent = AIAgent(
+                model=req.model or _default_model(),
+                session_id=req.session_id,
+                stream_delta_callback=on_delta,
+                quiet_mode=True,
+                verbose_logging=False,
+            )
+            result = await loop.run_in_executor(
+                None, lambda: agent.run_conversation(user_message=req.message)
+            )
+            result_holder["session_id"] = result.get("session_id") or agent.session_id or ""
+        except Exception as e:
+            q.put_nowait(("error", str(e)))
+        finally:
+            q.put_nowait(("done", None))
+
+    async def generate() -> AsyncGenerator[str, None]:
+        asyncio.create_task(run_agent())
+        while True:
+            try:
+                kind, payload = await loop.run_in_executor(
+                    None, lambda: q.get(timeout=60)
+                )
+            except (_queue.Empty, asyncio.TimeoutError):
+                continue
+            if kind == "token":
+                yield f"data: {json.dumps({'token': payload})}\n\n"
+            elif kind == "error":
+                yield f"data: {json.dumps({'error': payload})}\n\n"
+                break
+            elif kind == "done":
+                sid = result_holder.get("session_id", "")
+                yield f"data: {json.dumps({'done': True, 'session_id': sid})}\n\n"
+                break
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 # ---------------------------------------------------------------------------

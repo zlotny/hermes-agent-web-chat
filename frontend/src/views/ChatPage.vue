@@ -1,6 +1,5 @@
 <template>
   <div class="chat-layout">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <h2>Sessions</h2>
@@ -20,20 +19,17 @@
       </div>
     </aside>
 
-    <!-- Main chat -->
     <main class="main">
       <div class="messages" ref="messagesRef">
-        <div v-if="!chatMessages.length" class="empty-state">
+        <div v-if="!chatMessages.length && !streamingMsg" class="empty-state">
           <h1>Hermes</h1>
           <p>Type a message below to start a conversation.</p>
         </div>
         <template v-for="(m, i) in chatMessages" :key="i">
-          <!-- User message -->
           <div v-if="m.role === 'user'" class="msg user">
             <div class="role">You</div>
             <div class="bubble">{{ m.content }}</div>
           </div>
-          <!-- Assistant response -->
           <div v-if="m.role === 'assistant'" class="msg assistant">
             <div class="role">Hermes</div>
             <div class="bubble" v-html="renderContent(m.content || '')"></div>
@@ -44,7 +40,12 @@
             </div>
           </div>
         </template>
-        <div v-if="loadingSessions" class="typing">Loading session...</div>
+        <!-- Streaming message -->
+        <div v-if="streamingMsg" class="msg assistant">
+          <div class="role">Hermes</div>
+          <div class="bubble" v-html="renderContent(streamingMsg)"></div>
+          <div v-if="streamingTool" class="typing">⚡ {{ streamingTool }}...</div>
+        </div>
         <div v-if="loadError" class="error-msg">{{ loadError }}</div>
       </div>
 
@@ -52,7 +53,7 @@
         <div class="input-row">
           <textarea v-model="inputText" rows="1" placeholder="Type a message..."
             @keydown.enter.exact.prevent="sendMessage"
-            @input="resizeTextarea"></textarea>
+            @input="resizeTextarea" ref="chatInput"></textarea>
           <button @click="sendMessage" :disabled="sending">Send</button>
         </div>
       </div>
@@ -68,14 +69,14 @@ export default {
       currentSessionId: null,
       allMessages: [],
       inputText: '',
-      loadingSessions: false,
       sending: false,
       sidebarError: '',
       loadError: '',
+      streamingMsg: '',
+      streamingTool: '',
     }
   },
   computed: {
-    // Filter out tool messages and only show user + assistant
     chatMessages() {
       return this.allMessages.filter(m => m.role === 'user' || m.role === 'assistant')
     }
@@ -84,7 +85,14 @@ export default {
     const ok = await this.checkAuth()
     if (ok) this.loadSessions()
   },
+  updated() {
+    this.$nextTick(() => this.scrollToBottom())
+  },
   methods: {
+    scrollToBottom() {
+      const el = this.$refs.messagesRef
+      if (el) el.scrollTop = el.scrollHeight
+    },
     async checkAuth() {
       try {
         const res = await fetch('/api/sessions', { credentials: 'same-origin' })
@@ -110,7 +118,7 @@ export default {
     async loadSession(id) {
       this.currentSessionId = id
       this.loadError = ''
-      this.loadingSessions = true
+      this.sending = true
       try {
         const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await res.text())
@@ -120,13 +128,19 @@ export default {
         this.loadError = 'Error: ' + e.message
         this.allMessages = []
       } finally {
-        this.loadingSessions = false
+        this.sending = false
       }
     },
     newChat() {
       this.currentSessionId = null
       this.allMessages = []
+      this.streamingMsg = ''
+      this.streamingTool = ''
       this.loadError = ''
+      this.inputText = ''
+      this.$nextTick(() => {
+        if (this.$refs.chatInput) this.$refs.chatInput.focus()
+      })
     },
     shortModel(model) {
       if (!model) return ''
@@ -135,23 +149,87 @@ export default {
     },
     renderContent(text) {
       if (!text) return ''
-      // Code blocks: ```lang\ncode```
       let html = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      // Inline code: `text`
       html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-      // Bold: **text**
       html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Paragraphs
       html = html.replace(/\n\n/g, '</p><p>')
       html = html.replace(/\n/g, '<br>')
       return '<p>' + html + '</p>'
     },
-    sendMessage() {
+    async sendMessage() {
       if (!this.inputText.trim() || this.sending) return
-      // TODO: connect to AIAgent
-      this.allMessages.push({ role: 'user', content: this.inputText })
-      this.allMessages.push({ role: 'assistant', content: 'Chat not yet connected to Hermes Agent.' })
+      const text = this.inputText.trim()
       this.inputText = ''
+      this.loadError = ''
+
+      // Add user message
+      this.allMessages.push({ role: 'user', content: text })
+      this.streamingMsg = ''
+      this.streamingTool = ''
+      this.sending = true
+
+      try {
+        const res = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            message: text,
+            session_id: this.currentSessionId || null,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          this.loadError = err.error || `HTTP ${res.status}`
+          this.sending = false
+          return
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.token) {
+                this.streamingMsg += data.token
+              }
+              if (data.error) {
+                this.loadError = data.error
+                this.sending = false
+              }
+              if (data.done) {
+                // Move streaming message to permananent messages
+                if (this.streamingMsg) {
+                  this.allMessages.push({
+                    role: 'assistant',
+                    content: this.streamingMsg,
+                  })
+                }
+                this.currentSessionId = data.session_id || this.currentSessionId
+                this.streamingMsg = ''
+                this.sending = false
+                this.loadSessions() // refresh sidebar
+              }
+            } catch (e) {
+              // skip parse errors on partial lines
+            }
+          }
+        }
+      } catch (e) {
+        this.loadError = 'Connection error: ' + e.message
+      } finally {
+        this.sending = false
+      }
     },
     resizeTextarea(e) {
       const el = e.target
@@ -167,8 +245,6 @@ export default {
   display: flex; height: 100vh; overflow: hidden;
   background: #0d1117; color: #c9d1d9;
 }
-
-/* Sidebar */
 .sidebar {
   width: 280px; min-width: 280px;
   background: #161b22; border-right: 1px solid #30363d;
@@ -201,8 +277,6 @@ export default {
   background: #0d1117; border: 1px solid #30363d;
   border-radius: 3px; padding: 0 4px; font-size: 0.68rem;
 }
-
-/* Main */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .messages {
   flex: 1; overflow-y: auto; padding: 24px 16px;
@@ -239,20 +313,13 @@ export default {
   font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
   background: #0d1117; padding: 1px 4px; border-radius: 3px;
 }
-
-/* Tool chips */
-.tool-chips {
-  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
-}
+.tool-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .tool-chip {
   font-size: 0.72rem; background: #1c2333;
   border: 1px solid #30363d; border-radius: 4px;
   padding: 2px 8px; color: #8b949e;
 }
-
 .typing { color: #8b949e; font-size: 0.85rem; font-style: italic; padding: 8px 0; }
-
-/* Input */
 .input-area { border-top: 1px solid #30363d; padding: 16px; background: #161b22; }
 .input-row {
   max-width: 800px; margin: 0 auto; display: flex; gap: 8px;
@@ -271,9 +338,7 @@ export default {
 }
 .input-row button:hover { background: #79c0ff; }
 .input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
-
 .error-msg { color: #f85149; font-size: 0.85rem; padding: 8px; }
-
 @media (max-width: 640px) {
   .sidebar { display: none; }
   .messages { padding: 16px 12px; }
