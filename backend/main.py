@@ -126,8 +126,18 @@ def _list_sessions() -> list[dict]:
             "last_updated": data.get("last_updated", ""),
             "started_at": data.get("session_start", ""),
         })
+    # Group consecutive sessions with same title (same first user message).
+    # Hermes creates a new file on /new, cluttering the list with duplicates.
+    # Keep only the most recent session per unique topic.
     sessions.sort(key=lambda s: s["last_updated"], reverse=True)
-    return sessions
+    seen_titles: set[str] = set()
+    deduped: list[dict] = []
+    for s in sessions:
+        key = s["title"]
+        if key not in seen_titles:
+            seen_titles.add(key)
+            deduped.append(s)
+    return deduped
 
 
 def _get_session(session_id: str) -> Optional[dict]:
