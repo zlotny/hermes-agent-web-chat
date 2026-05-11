@@ -149,8 +149,8 @@
               </div>
             </div>
             <!-- Assistant message -->
-            <div v-if="g.type === 'message' && g.msg.role === 'assistant'" class="flex justify-start">
-              <div class="max-w-[85%]">
+            <div v-if="g.type === 'message' && g.msg.role === 'assistant'" class="flex justify-start min-w-0">
+              <div class="max-w-[85%] min-w-0">
                 <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M12 2a10 10 0 0 1 10 10c0 5-4 8-10 8-2.5 0-4.8-.8-6.7-2.2L2 22l1.8-4.5A9.8 9.8 0 0 1 2 12 10 10 0 0 1 12 2z"/></svg>
                   Hermes
@@ -186,9 +186,9 @@
                   <template v-for="(tc, tci) in g.tool_calls" :key="tc.id || tc.call_id || tci">
                     <span class="text-muted/40 text-[10px] mx-0.5" v-if="tci > 0">›</span>
                     <div class="group relative inline-flex">
-                      <span class="text-[11px] bg-[#1c2333]/60 border border-border/50 rounded-md px-2 py-0.5 text-muted/60 cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-[#c9d1d9]">
-                        <span class="text-muted/40">{{ tc.function?.name || tc.name || 'tool' }}</span>
-                        <span v-if="_toolArgPreview(tc)" class="text-muted/30 ml-1">{{ _toolArgPreview(tc) }}</span>
+                      <span class="text-[11px] bg-[#1c2333] border border-border rounded-md px-2 py-0.5 text-muted cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-[#c9d1d9]">
+                        <span class="text-muted/60">{{ tc.function?.name || tc.name || 'tool' }}</span>
+                        <span v-if="_toolArgPreview(tc)" class="text-muted/40 ml-1">{{ _toolArgPreview(tc) }}</span>
                       </span>
                       <div class="absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-280px-4rem)] p-3 rounded-lg bg-[#0d1117] border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto">
                         <div class="font-semibold text-accent mb-1 text-[11px]">{{ tc.function?.name || tc.name || 'tool' }}</div>
