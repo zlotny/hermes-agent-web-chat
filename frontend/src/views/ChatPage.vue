@@ -12,17 +12,17 @@
       sidebarOpen ? (isDesktop ? 'w-[280px] min-w-[280px]' : 'w-[280px]') : 'w-0 min-w-0 border-0',
     ]">
       <div v-if="sidebarOpen" class="flex flex-col h-full min-w-[280px]">
-        <div class="flex items-center justify-between px-4 py-4 border-b border-border">
-          <h2 class="text-sm font-semibold tracking-wide">Sessions</h2>
-          <div class="flex items-center gap-1">
-            <button @click="newChat" class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted hover:text-[#c9d1d9] transition-colors" title="New chat">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            <button @click="sidebarOpen = false" class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted hover:text-[#c9d1d9] transition-colors lg:hidden" title="Close sidebar">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+          <div class="flex items-center justify-between px-4 py-4 border-b border-border">
+            <h2 class="text-sm font-semibold tracking-wide">Sessions</h2>
+            <div class="flex items-center gap-1">
+              <button @click="newChat" class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted hover:text-[#c9d1d9] transition-colors" title="New chat">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <button @click="sidebarOpen = false" class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted hover:text-[#c9d1d9] transition-colors" title="Collapse sidebar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              </button>
+            </div>
           </div>
-        </div>
         <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
           <div v-if="loadingSessions" class="space-y-3 px-2 pt-2">
             <div v-for="n in 5" :key="n" class="space-y-1.5">
@@ -102,7 +102,7 @@
         </div>
 
         <!-- Messages -->
-        <div v-else class="max-w-[800px] mx-auto px-4 py-6 pb-32 space-y-5">
+        <div v-else class="max-w-[800px] mx-auto px-4 pt-6 pb-44 space-y-5">
           <template v-for="(m, i) in chatMessages" :key="i">
             <div v-if="m.role === 'user'" class="flex justify-end">
               <div class="max-w-[75%]">
@@ -237,7 +237,7 @@ export default {
       this.sidebarError = ''
       this.loadingSessions = true
       try {
-        const res = await fetch('/api/sessions?limit=5', { credentials: 'same-origin' })
+        const res = await fetch('/api/sessions', { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await res.text())
         this.allSessions = await res.json()
       } catch (e) { this.sidebarError = 'Failed: ' + e.message }
@@ -245,12 +245,6 @@ export default {
     },
     async showAllSessions() {
       this.showAll = true
-      if (this.allSessions.length <= 5) return
-      try {
-        const res = await fetch('/api/sessions', { credentials: 'same-origin' })
-        if (!res.ok) throw new Error(await res.text())
-        this.allSessions = await res.json()
-      } catch (e) { this.sidebarError = 'Failed: ' + e.message }
     },
     async loadSession(id) {
       this.currentSessionId = id
