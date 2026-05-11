@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import LoginPage from './views/LoginPage.vue'
 import ChatPage from './views/ChatPage.vue'
+import './style.css'
 
 const routes = [
   { path: '/login', component: LoginPage },
