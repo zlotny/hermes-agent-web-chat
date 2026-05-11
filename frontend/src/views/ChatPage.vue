@@ -25,7 +25,7 @@
           </div>
         <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
           <div v-if="loadingSessions" class="space-y-3 px-2 pt-2">
-            <div v-for="n in 5" :key="n" class="space-y-1.5">
+            <div v-for="n in 8" :key="n" class="space-y-1.5">
               <div class="skel h-3 w-[85%]"></div>
               <div class="skel h-2 w-[45%]"></div>
             </div>
@@ -102,7 +102,7 @@
       </div>
 
       <!-- Scroll area -->
-      <div ref="messagesRef" class="flex-1 overflow-y-auto">
+      <div ref="messagesRef" class="flex-1 overflow-y-auto overflow-x-hidden">
         <!-- Empty state -->
         <div v-if="!chatMessages.length && !streamingMsg"
              class="flex flex-col items-center justify-center min-h-full px-4 py-12">
@@ -295,7 +295,7 @@ export default {
       return groups
     },
     visibleSessions() {
-      return this.showAll ? this.allSessions : this.allSessions.slice(0, 5)
+      return this.showAll ? this.allSessions : this.allSessions.slice(0, 20)
     }
   },
   created() {
@@ -329,7 +329,7 @@ export default {
     },
     async checkAuth() {
       try {
-        const res = await fetch('/api/sessions?limit=5&show_crons=false', { credentials: 'same-origin' })
+        const res = await fetch('/api/sessions?limit=20&show_crons=false', { credentials: 'same-origin' })
         if (res.status === 401) { this.$router.push('/login'); return false }
         return true
       } catch { return false }
@@ -338,7 +338,7 @@ export default {
       this.sidebarError = ''
       this.loadingSessions = true
       try {
-        const url = `/api/sessions?limit=5&show_crons=${this.showCrons}`
+        const url = `/api/sessions?limit=20&show_crons=${this.showCrons}`
         const res = await fetch(url, { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await res.text())
         const data = await res.json()
