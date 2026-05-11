@@ -68,6 +68,13 @@
                 <div :class="['w-3 h-3 rounded-full bg-white absolute top-0.5 transition-transform', showCrons ? 'translate-x-4' : 'translate-x-0.5']"></div>
               </div>
             </div>
+            <div class="flex items-center justify-between px-3 py-2 rounded-md hover:bg-[#1c2333] cursor-pointer transition-colors"
+                 @click="showSystemMessages = !showSystemMessages; settingsOpen = false">
+              <span class="text-xs">System messages</span>
+              <div :class="['w-8 h-4 rounded-full transition-colors relative', showSystemMessages ? 'bg-accent' : 'bg-[#30363d]']">
+                <div :class="['w-3 h-3 rounded-full bg-white absolute top-0.5 transition-transform', showSystemMessages ? 'translate-x-4' : 'translate-x-0.5']"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -123,10 +130,19 @@
         <!-- Messages -->
         <div v-else class="max-w-[800px] mx-auto px-4 pt-6 pb-44 space-y-5">
           <template v-for="(m, i) in chatMessages" :key="i">
-            <div v-if="m.role === 'user'" class="flex justify-end">
+            <div v-if="m.role === 'user' && !_isSystemMsg(m)" class="flex justify-end">
               <div class="max-w-[75%]">
                 <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 text-right">You</div>
                 <div class="bg-accent/10 border border-accent/20 px-4 py-3 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words">
+                  {{ m.content }}
+                </div>
+              </div>
+            </div>
+            <!-- System message -->
+            <div v-if="m.role === 'user' && _isSystemMsg(m)" class="flex justify-center">
+              <div class="max-w-[90%]">
+                <div class="text-[11px] font-semibold text-[#d29922]/80 uppercase tracking-wider mb-1 text-center">System</div>
+                <div class="bg-[#d29922]/5 border border-[#d29922]/20 px-4 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d29922]/70">
                   {{ m.content }}
                 </div>
               </div>
@@ -207,6 +223,7 @@ export default {
       streamingTool: '',
       showAll: false,
       showCrons: false,
+      showSystemMessages: false,
       settingsOpen: false,
       totalSessions: 0,
       sidebarOpen: true,
@@ -216,7 +233,11 @@ export default {
   },
   computed: {
     chatMessages() {
-      return this.allMessages.filter(m => m.role === 'user' || m.role === 'assistant')
+      return this.allMessages.filter(m => {
+        if (m.role !== 'user' && m.role !== 'assistant') return false
+        if (m.role === 'user' && this._isSystemMsg(m) && !this.showSystemMessages) return false
+        return true
+      })
     },
     visibleSessions() {
       return this.showAll ? this.allSessions : this.allSessions.slice(0, 5)
@@ -293,6 +314,11 @@ export default {
         this.allMessages = (await res.json()).messages || []
       } catch (e) { this.loadError = 'Error: ' + e.message; this.allMessages = [] }
       finally { this.sending = false }
+    },
+    _isSystemMsg(m) {
+      if (!m || !m.content) return false
+      const c = m.content.trim()
+      return c.startsWith('[IMPORTANT:') || c.startsWith('Review the conversation above')
     },
     newChat() {
       this.currentSessionId = null
