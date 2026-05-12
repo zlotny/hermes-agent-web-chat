@@ -7,6 +7,7 @@
         :providers="providers"
         :loading="providersLoading"
         @select-model="onModelSelect"
+        @closed="focus"
       />
     </div>
     <div
@@ -76,7 +77,7 @@ export default {
     providers: { type: Array, default: () => [] },
     providersLoading: { type: Boolean, default: false },
   },
-  emits: ["update:modelValue", "send", "select-model", "stop"],
+  emits: ["update:modelValue", "send", "select-model", "stop", "closed"],
   computed: {
     text: {
       get() {

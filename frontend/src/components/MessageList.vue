@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[800px] mx-auto px-4 pt-6 pb-28 space-y-5">
+  <div class="max-w-[800px] mx-auto px-4 pt-6 pb-44 space-y-5">
     <template v-for="(g, gi) in displayGroups" :key="gi">
       <!-- User or System or Assistant message -->
       <MessageBubble v-if="g.type === 'message'" :message="g.msg" />
@@ -22,6 +22,11 @@
 
     <!-- Error -->
     <div v-if="error" class="text-[#f85149] text-xs text-center p-2">{{ error }}</div>
+
+    <!-- Last message timestamp -->
+    <div v-if="lastMsgTime" class="text-[10px] text-muted/30 text-center pb-2">
+      Last message on {{ lastMsgTime }}
+    </div>
   </div>
 </template>
 
@@ -70,6 +75,21 @@ export default {
         }
       }
       return groups
+    },
+    lastMsgTime() {
+      const msgs = this.messages
+      if (!msgs || !msgs.length) return ''
+      const last = msgs[msgs.length - 1]
+      const ts = last.timestamp || last.created_at
+      if (!ts) return ''
+      const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts)
+      if (isNaN(d.getTime())) return ''
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     },
   },
   methods: {

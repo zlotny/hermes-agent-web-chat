@@ -2,28 +2,33 @@
   <!-- User message (real) -->
   <div
     v-if="message.role === 'user' && message.source !== 'system' && !isSystemMsg"
-    class="flex justify-end group"
+    class="flex justify-end group animate-fade-in"
   >
     <div class="max-w-[75%] relative">
-      <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 text-right">You</div>
+      <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 flex items-center justify-end gap-2">
+        <span v-if="message.timestamp" class="text-[10px] font-normal normal-case text-muted/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{{ formatMsgTime(message.timestamp) }}</span>
+        <span>You</span>
+      </div>
       <div class="bg-accent/10 border border-accent/20 px-4 py-3 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words">
         {{ message.content }}
       </div>
       <!-- Copy button -->
-      <button
-        title="Copy message"
-        @click="copyContent"
-        class="absolute -top-0.5 -right-9 p-1 rounded-md text-muted/40 hover:text-[#c9d1d9] hover:bg-[#1c2333] transition-all opacity-0 group-hover:opacity-100"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      </button>
+      <div class="absolute -top-0.5 -right-9 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <button
+          title="Copy message"
+          @click="copyContent"
+          class="p-1 rounded-md text-muted/40 hover:text-[#c9d1d9] hover:bg-[#1c2333] transition-all"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- System message -->
   <div
     v-if="message.role === 'user' && (message.source === 'system' || isSystemMsg)"
-    class="flex justify-center"
+    class="flex justify-center animate-fade-in"
   >
     <div class="max-w-[90%]">
       <div class="text-[11px] font-semibold text-[#d29922]/80 uppercase tracking-wider mb-1 text-center">System</div>
@@ -34,25 +39,27 @@
   </div>
 
   <!-- Assistant message -->
-  <div v-if="message.role === 'assistant'" class="flex justify-start min-w-0 group">
+  <div v-if="message.role === 'assistant'" class="flex justify-start min-w-0 group animate-fade-in">
     <div class="max-w-[85%] min-w-0 relative">
-      <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M12 2a10 10 0 0 1 10 10c0 5-4 8-10 8-2.5 0-4.8-.8-6.7-2.2L2 22l1.8-4.5A9.8 9.8 0 0 1 2 12 10 10 0 0 1 12 2z"/></svg>
-        Hermes
+      <div class="text-[11px] font-semibold text-muted/60 uppercase tracking-wider mb-1 flex items-center justify-between gap-2">
+        <span>Hermes</span>
+        <span v-if="message.timestamp" class="text-[10px] font-normal normal-case text-muted/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{{ formatMsgTime(message.timestamp) }}</span>
       </div>
       <div class="px-1 text-sm leading-relaxed whitespace-pre-wrap break-words" v-html="renderedContent"></div>
       <!-- Tool calls within this message -->
       <div v-if="message.tool_calls && message.tool_calls.length" class="mt-2">
         <ToolChain :tool-calls="message.tool_calls" />
       </div>
-      <!-- Copy button -->
-      <button
-        title="Copy message"
-        @click="copyContent"
-        class="absolute top-0 -right-9 p-1 rounded-md text-muted/40 hover:text-[#c9d1d9] hover:bg-[#1c2333] transition-all opacity-0 group-hover:opacity-100"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      </button>
+      <!-- Copy button (no longer has timestamp, it's in the header) -->
+      <div class="absolute top-0 -right-9 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <button
+          title="Copy message"
+          @click="copyContent"
+          class="p-1 rounded-md text-muted/40 hover:text-[#c9d1d9] hover:bg-[#1c2333] transition-all"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -91,6 +98,17 @@ export default {
     },
   },
   methods: {
+    formatMsgTime(ts) {
+      if (!ts) return ''
+      const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts)
+      if (isNaN(d.getTime())) return ''
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    },
     async copyContent() {
       try {
         await navigator.clipboard.writeText(this.message.content || '')
