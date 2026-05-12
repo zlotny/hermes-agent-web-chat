@@ -1,5 +1,5 @@
 [Unit]
-Description=Hermes Thin Client Backend (host process)
+Description=Hermes Agent Web Chat Backend (host process)
 After=network-online.target
 Wants=network-online.target
 

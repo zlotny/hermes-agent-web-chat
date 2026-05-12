@@ -21,7 +21,7 @@ def setup_static_serving(app: FastAPI) -> None:
             return JSONResponse(
                 {
                     "status": "ok",
-                    "message": "Hermes Thin Client API running. Frontend not built.",
+                    "message": "Hermes Agent Web Chat API running. Frontend not built.",
                 }
             )
         return

@@ -1,4 +1,4 @@
-"""Hermes Thin Client — FastAPI Application Factory."""
+"""Hermes Agent Web Chat — FastAPI Application Factory."""
 
 import sys
 import os
@@ -26,7 +26,7 @@ if os.path.isdir(HERMES_SRC):
 
 def create_app() -> FastAPI:
     """Build and return the configured FastAPI application."""
-    app = FastAPI(title="Hermes Thin Client")
+    app = FastAPI(title="Hermes Agent Web Chat")
 
     # ------------------------------------------------------------------
     # Auth middleware — guards /api/* and SPA routes

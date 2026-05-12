@@ -1,4 +1,4 @@
-# Hermes Thin Client
+# Hermes Agent Web Chat
 
 A web chat interface for [Hermes Agent](https://github.com/NousResearch/hermes-agent). A **drop-in replacement for the TUI** (`hermes chat`) — same agent, same session database, same tools — but accessible from a web browser.
 
