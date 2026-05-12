@@ -2,7 +2,15 @@
 
 A web chat interface for [Hermes Agent](https://github.com/NousResearch/hermes-agent). A **drop-in replacement for the TUI** (`hermes chat`) — same agent, same session database, same tools — but accessible from a web browser.
 
-No terminal quirks, no prompt\_toolkit TUI. Just a clean chat UI that works on desktop and mobile. Start a long-running task, close the tab, and come back later to check results.
+No terminal quirks. No overengineering. No weird over-scoping. Just a clean chat UI that works on desktop and mobile.
+
+## Motivation
+
+I created this project for myself, really. After trying different frontends I found that they don't solve what was for me the most basic thing: Usability.
+
+- `hermes-webui`: forced workspace prompt wastes tokens, too slow & clunky, runs as a standalone hermes install with different values that I have on telegram or chat.  - hermes dashboard: no auth, just proxies the terminal, unusable theme on mobile, bad contrast...
+- Open WebUI: Uses hermes-agent OpenAPI-like api -> can't swap model
+- etc...
 
 ## How it works
 
