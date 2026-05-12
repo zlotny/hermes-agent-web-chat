@@ -24,7 +24,8 @@
         <path d="M11 17v.01" />
         <path d="M7 14v.01" />
       </svg>
-      <span class="max-w-[160px] truncate">{{ displayModel }}</span>
+      <span v-if="loading" class="skel h-3 w-16 inline-block align-middle rounded"></span>
+      <span v-else class="max-w-[160px] truncate">{{ displayModel }}</span>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="10"
@@ -47,7 +48,7 @@
       v-if="open"
       @click.stop
       :style="{ ...dropdownStyle, pointerEvents: 'auto' }"
-      class="z-[9999] w-[320px] max-h-[400px] bg-[#161b22] border border-border/80 rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden"
+      class="z-[9999] w-[320px] max-h-[400px] bg-[#161b22] border border-border/80 rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
       @mousedown.stop
     >
       <!-- Header -->
@@ -105,13 +106,17 @@
       </div>
 
       <!-- Provider list (level 1) -->
-      <div v-else-if="!selectedProviderSlug" class="overflow-y-auto flex-1">
+      <div v-else-if="!selectedProviderSlug" class="overflow-y-auto flex-1" tabindex="0" ref="listRef" @keydown="onProviderKeydown">
         <button
-          v-for="p in providers"
+          v-for="(p, pi) in providers"
           :key="p.slug"
+          :ref="(el) => { if (el) providerRefs[pi] = el }"
           @click="selectProvider(p)"
           class="w-full flex items-center justify-between px-3 py-2.5 text-xs hover:bg-[#1c2333] transition-colors text-left border-b border-border/30 last:border-b-0 cursor-pointer"
-          :class="p.is_current ? 'text-[#79c0ff]' : 'text-[#c9d1d9]'"
+          :class="[
+            p.is_current ? 'text-[#79c0ff]' : 'text-[#c9d1d9]',
+            focusedIndex === pi ? 'bg-[#1c2333] ring-1 ring-accent/40' : ''
+          ]"
         >
           <div class="flex items-center gap-2">
             <span class="font-medium">{{ p.name }}</span>
@@ -147,10 +152,10 @@
       </div>
 
       <!-- Model list (level 2) -->
-      <div v-else class="overflow-y-auto flex-1">
+      <div v-else class="overflow-y-auto flex-1" tabindex="0" ref="listRef" @keydown="onModelKeydown">
         <!-- Back button -->
         <button
-          @click="selectedProviderSlug = null"
+          @click="selectedProviderSlug = null; focusedIndex = 0"
           class="w-full flex items-center gap-1.5 px-3 py-2 text-xs text-muted hover:text-[#c9d1d9] hover:bg-[#1c2333] transition-colors border-b border-border/30 cursor-pointer"
         >
           <svg
@@ -177,6 +182,7 @@
             placeholder="Type to search all models…"
             class="w-full bg-[#0d1117] border border-border/60 rounded-md px-2.5 py-1.5 text-xs text-[#c9d1d9] outline-none placeholder:text-muted/50 focus:border-accent/50 transition-colors"
             ref="searchRef"
+            @keydown.stop="onSearchKeydown"
           />
         </div>
 
@@ -206,9 +212,13 @@
             <button
               v-for="m in displayModels"
               :key="m"
+              :ref="(el) => { if (el) modelRefs[displayModels.indexOf(m)] = el }"
               @click="pickModel(m)"
               class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[#1c2333] transition-colors text-left cursor-pointer"
-              :class="isActiveModel(m) ? 'text-[#79c0ff]' : 'text-[#c9d1d9]'"
+              :class="[
+                isActiveModel(m) ? 'text-[#79c0ff]' : 'text-[#c9d1d9]',
+                focusedIndex === displayModels.indexOf(m) ? 'bg-[#1c2333] ring-1 ring-accent/40' : ''
+              ]"
             >
               <span v-if="isActiveModel(m)" class="text-accent flex-shrink-0">
                 <svg
@@ -248,7 +258,7 @@ export default {
     providers: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false },
   },
-  emits: ["select-model"],
+  emits: ["select-model", "closed"],
   setup() {
     return {
       chatStore: useChatStore(),
@@ -266,6 +276,9 @@ export default {
       searchLoading: false,
       usingFullCatalog: false,
       _searchDebounceTimer: null,
+      focusedIndex: 0,
+      providerRefs: [],
+      modelRefs: [],
     };
   },
   computed: {
@@ -316,7 +329,76 @@ export default {
         this.showAllModels = false;
         this.searchModels = [];
         this.usingFullCatalog = false;
+        this.focusedIndex = 0;
+        this.providerRefs = [];
+        this.modelRefs = [];
+        this.$nextTick(() => {
+          this.$refs.listRef?.focus();
+          this.scrollFocusedIntoView();
+        });
       }
+    },
+    onProviderKeydown(e) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.focusedIndex = Math.min(this.focusedIndex + 1, this.providers.length - 1);
+        this.scrollFocusedIntoView();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.focusedIndex = Math.max(this.focusedIndex - 1, 0);
+        this.scrollFocusedIntoView();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const p = this.providers[this.focusedIndex];
+        if (p) this.selectProvider(p);
+      }
+    },
+    onModelKeydown(e) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.focusedIndex = Math.min(this.focusedIndex + 1, this.displayModels.length - 1);
+        this.scrollFocusedIntoView();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.focusedIndex = Math.max(this.focusedIndex - 1, 0);
+        this.scrollFocusedIntoView();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const m = this.displayModels[this.focusedIndex];
+        if (m) this.pickModel(m);
+      }
+    },
+    /** Intercept arrow keys in the search input to navigate the model list. */
+    onSearchKeydown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        this.close()
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.focusedIndex = Math.min(this.focusedIndex + 1, this.displayModels.length - 1);
+        this.scrollFocusedIntoView();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.focusedIndex = Math.max(this.focusedIndex - 1, 0);
+        this.scrollFocusedIntoView();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        // Only intercept Enter/Space when there's a focused model
+        if (this.focusedIndex >= 0 && this.focusedIndex < this.displayModels.length) {
+          e.preventDefault();
+          const m = this.displayModels[this.focusedIndex];
+          if (m) this.pickModel(m);
+        }
+      }
+      // All other keys flow through to the search input naturally
+    },
+    scrollFocusedIntoView() {
+      this.$nextTick(() => {
+        const refs = this.selectedProviderSlug ? this.modelRefs : this.providerRefs;
+        const el = refs[this.focusedIndex];
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
     },
     selectProvider(p) {
       this.selectedProviderSlug = p.slug;
@@ -324,6 +406,9 @@ export default {
       this.showAllModels = false;
       this.searchModels = [];
       this.usingFullCatalog = false;
+      this.focusedIndex = 0;
+      this.providerRefs = [];
+      this.modelRefs = [];
       this.$nextTick(() => {
         this.$refs.searchRef?.focus();
       });
@@ -377,14 +462,23 @@ export default {
       this.showAllModels = false;
       this.searchModels = [];
       this.usingFullCatalog = false;
+      this.focusedIndex = 0;
+      this.providerRefs = [];
+      this.modelRefs = [];
       if (this._searchDebounceTimer) {
         clearTimeout(this._searchDebounceTimer);
         this._searchDebounceTimer = null;
       }
+      this.$emit("closed");
     },
     handleClickOutside(e) {
       const el = this.$refs.containerRef;
       if (el && !el.contains(e.target)) {
+        this.close();
+      }
+    },
+    handleEscape(e) {
+      if (e.key === 'Escape' && this.open) {
         this.close();
       }
     },
@@ -396,9 +490,11 @@ export default {
   },
   mounted() {
     document.addEventListener("click", this.handleClickOutside);
+    document.addEventListener("keydown", this.handleEscape);
   },
   beforeUnmount() {
     document.removeEventListener("click", this.handleClickOutside);
+    document.removeEventListener("keydown", this.handleEscape);
     if (this._searchDebounceTimer) clearTimeout(this._searchDebounceTimer);
   },
 };
