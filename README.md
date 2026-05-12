@@ -55,9 +55,9 @@ The Vue SPA runs in Docker, but the Python backend runs **directly on the host**
 #### 1 — Host backend (systemd)
 
 ```bash
-sudo cp deploy/hermes-thin-client-backend.service /etc/systemd/system/
+sudo cp deploy/hermes-agent-web-chat-backend.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now hermes-thin-client-backend.service
+sudo systemctl enable --now hermes-agent-web-chat-backend.service
 ```
 
 Backend listens on port **8001** (not exposed to the internet).
@@ -65,7 +65,7 @@ Backend listens on port **8001** (not exposed to the internet).
 #### 2 — Container (SPA + API proxy)
 
 ```bash
-docker build --no-cache-filter=frontend -t hermes-thin-client .
+docker build --no-cache-filter=frontend -t hermes-agent-web-chat .
 docker run -d --name hermes-ndrs-es --restart unless-stopped \
   -e BACKEND_HOST=172.17.0.1 \
   -e BACKEND_PORT=8001 \
@@ -73,7 +73,7 @@ docker run -d --name hermes-ndrs-es --restart unless-stopped \
   -l traefik.frontend.rule=Host=hermes.yourdomain.com \
   -l traefik.port=8000 \
   -l traefik.protocol=http \
-  hermes-thin-client
+  hermes-agent-web-chat
 ```
 
 The container serves the SPA and proxies `/api/*` to the host. Traefik terminates TLS.
@@ -106,7 +106,7 @@ cd frontend
 npm run dev
 
 # Container rebuild (when frontend changes)
-docker build -t hermes-thin-client .
+docker build -t hermes-agent-web-chat .
 docker run -d --name hermes-ndrs-es --restart unless-stopped \
   -e BACKEND_HOST=172.17.0.1 \
   -e BACKEND_PORT=8001 \
@@ -114,5 +114,5 @@ docker run -d --name hermes-ndrs-es --restart unless-stopped \
   -l traefik.frontend.rule=Host=hermes.yourdomain.com \
   -l traefik.port=8000 \
   -l traefik.protocol=http \
-  hermes-thin-client
+  hermes-agent-web-chat
 ```
