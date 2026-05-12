@@ -11,6 +11,7 @@ from app.config import HERMES_VENV, HERMES_SRC
 from app.auth import router as auth_router, check_session
 from app.sessions import router as sessions_router
 from app.chat import router as chat_router
+from app.providers import router as providers_router
 from app.static import setup_static_serving
 
 
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(sessions_router)
     app.include_router(chat_router)
+    app.include_router(providers_router)
 
     # ------------------------------------------------------------------
     # Static file serving (SPA)

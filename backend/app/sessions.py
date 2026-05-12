@@ -1,5 +1,7 @@
 """Session listing and retrieval via Hermes' SQLite SessionDB."""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 
 from app.dependencies import get_db
@@ -13,45 +15,42 @@ async def list_sessions(limit: int = 0, show_crons: bool = False):
     """List sessions via Hermes' SessionDB — same as `hermes sessions browse`."""
     db = get_db()
     effective_limit = limit if limit > 0 else 9999
+    loop = asyncio.get_event_loop()
 
-    # Fetch many more rows before LIMIT so cron filtering doesn't starve results
-    fetch_limit = effective_limit * 5 + 100
-    rows = db._conn.execute(
-        """
-        SELECT s.id, s.source, s.model, s.title, s.message_count,
-               s.started_at, s.ended_at,
-               COALESCE((SELECT MAX(m.timestamp) FROM messages m WHERE m.session_id = s.id), s.started_at) AS last_active,
-               COALESCE((SELECT SUBSTR(REPLACE(REPLACE(m.content, X'0A', ' '), X'0D', ' '), 1, 63)
-                        FROM messages m
-                        WHERE m.session_id = s.id AND m.role = 'user' AND m.content IS NOT NULL
-                        ORDER BY m.timestamp, m.id LIMIT 1), '') AS preview
-        FROM sessions s
-        ORDER BY last_active DESC
-        LIMIT ?
-    """,
-        (fetch_limit,),
-    ).fetchall()
+    # Use SessionDB.list_sessions_rich() via run_in_executor to avoid the
+    # known async bug where db._lock causes 0-row returns in async handlers.
+    exclude = None if show_crons else ["cron"]
+    rows = await loop.run_in_executor(
+        None,
+        lambda: db.list_sessions_rich(
+            exclude_sources=exclude,
+            limit=effective_limit,
+            offset=0,
+            order_by_last_active=True,
+        ),
+    )
 
     sessions = []
     for row in rows:
-        sid = row["id"]
-        source = row["source"]
-        if not show_crons and (sid.startswith("cron_") or source == "cron"):
+        sid = row.get("id", "")
+        source = row.get("source", "")
+        # Safety net: filter cron by ID prefix even with exclude_sources
+        if not show_crons and sid.startswith("cron_"):
             continue
-        raw_preview = (row["preview"] or "").strip()
+        preview = (row.get("preview") or "").strip()
         title = (
-            raw_preview[:60] + ("..." if len(raw_preview) > 60 else "")
-            if raw_preview
-            else (row["title"] or sid)
+            preview[:60] + ("..." if len(preview) > 60 else "")
+            if preview
+            else (row.get("title") or sid)
         )
         sessions.append(
             {
                 "id": sid,
-                "model": row["model"] or "",
+                "model": row.get("model") or "",
                 "title": title,
-                "message_count": row["message_count"] or 0,
-                "last_updated": ts_to_iso(row["last_active"]),
-                "started_at": ts_to_iso(row["started_at"]),
+                "message_count": row.get("message_count") or 0,
+                "last_updated": ts_to_iso(row.get("last_active")),
+                "started_at": ts_to_iso(row.get("started_at")),
                 "is_cron": sid.startswith("cron_") or source == "cron",
             }
         )
@@ -63,27 +62,30 @@ async def list_sessions(limit: int = 0, show_crons: bool = False):
 
 @router.get("/api/debug/db")
 async def debug_db():
-    """Debug endpoint to check SessionDB state."""
+    """Debug endpoint to check SessionDB state using public API."""
     db = get_db()
-    cursor = db._conn.execute("SELECT COUNT(*) FROM sessions")
-    total = cursor.fetchone()[0]
-    cursor = db._conn.execute("SELECT source, COUNT(*) FROM sessions GROUP BY source")
-    by_source = {r[0]: r[1] for r in cursor}
-    cursor = db._conn.execute("SELECT COUNT(*) FROM messages")
-    msgs = cursor.fetchone()[0]
-    cursor = db._conn.execute(
-        "SELECT id, source, parent_session_id, message_count FROM sessions ORDER BY started_at DESC LIMIT 5"
-    )
-    recent = [
-        {"id": r[0], "source": r[1], "parent": r[2], "msgs": r[3]} for r in cursor
-    ]
-    return {
-        "total_sessions": total,
-        "by_source": by_source,
-        "total_messages": msgs,
-        "recent_sessions": recent,
-        "db_path": str(get_db().db_path),
-    }
+    loop = asyncio.get_event_loop()
+
+    def _query_stats():
+        # Use list_sessions_rich to get total count, source breakdown, etc.
+        all_sessions = db.list_sessions_rich(limit=9999, include_children=True)
+        return {
+            "total_sessions": len(all_sessions),
+            "by_source": {},
+            "total_messages": sum(s.get("message_count", 0) for s in all_sessions),
+            "recent_sessions": [
+                {
+                    "id": s["id"],
+                    "source": s.get("source", ""),
+                    "parent": s.get("parent_session_id"),
+                    "msgs": s.get("message_count", 0),
+                }
+                for s in all_sessions[:5]
+            ],
+            "db_path": str(db.db_path),
+        }
+
+    return await loop.run_in_executor(None, _query_stats)
 
 
 @router.get("/api/sessions/{session_id}")

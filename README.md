@@ -1,64 +1,110 @@
 # Hermes Thin Client
 
-A lightweight web chat interface for [Hermes Agent](https://github.com/NimbleArchitect/hermes-agent). Mobile-first Vue SPA with a Python/FastAPI backend — no TUI, no Node.js runtime, no exposed Hermes ports.
+A web chat interface for [Hermes Agent](https://github.com/NousResearch/hermes-agent). A **drop-in replacement for the TUI** (`hermes chat`) — same agent, same session database, same tools — but accessible from a web browser.
 
-## Features
+No terminal quirks, no prompt\_toolkit TUI. Just a clean chat UI that works on desktop and mobile. Start a long-running task, close the tab, and come back later to check results.
 
-- **Chat** with Hermes AI Agent via SSE streaming
-- **Session browser** — browse and resume past conversations
-- **Tool call visualization** — inline badges with argument previews
-- **Password auth** — simple cookie-based auth middleware
-- **Docker** — single container, multi-stage build
+## How it works
+
+The Python backend uses the **exact same Hermes Agent classes** (`AIAgent`, `SessionDB`) that `hermes chat` uses. When you send a message:
+
+1. The backend creates `AIAgent` with your configured model and session
+2. The agent runs on the **host machine** — filesystem access, terminal commands, and tools work exactly as if you ran `hermes chat` in a terminal
+3. Streaming responses arrive via Server-Sent Events (SSE) — real-time token streaming
+4. Sessions are stored in the **same SQLite database** (`~/.hermes/state.db`) — CLI and web sessions coexist seamlessly. You can start something in the web UI and resume it in the terminal, or vice versa
+
+No Hermes ports exposed. No config changes needed. The only difference is the UI.
 
 ## Quick start
 
 ### Prerequisites
 
-- A working [Hermes Agent](https://github.com/NimbleArchitect/hermes-agent) installation at `~/.hermes/`
-- Python 3.11+, Node.js 22+ (dev only)
+- A working [Hermes Agent](https://github.com/NousResearch/hermes-agent) installation at `~/.hermes/` with a configured provider (run `hermes setup` first)
+- Python 3.11+
 
-### Dev
+### Run locally
 
 ```bash
 # Terminal 1 — backend
 cd backend
 pip install -r requirements.txt
-HERMES_HOME=$HOME/.hermes AUTH_PASSWORD=changeme uvicorn main:app --reload
+HERMES_HOME=$HOME/.hermes \
+HERMES_SRC=$HOME/.hermes/hermes-agent \
+AUTH_PASSWORD=changeme \
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-# Terminal 2 — frontend
+# Terminal 2 — frontend (dev server)
 cd frontend
 npm install && npm run dev
 ```
 
-Open **http://localhost:5173** (Vite proxies `/api/*` to `:8000`).
+Open **http://localhost:5173** and log in.
 
-### Docker
+### Deploy with Docker + reverse proxy
+
+The Vue SPA runs in Docker, but the Python backend runs **directly on the host** so the agent's terminal tool sees your real filesystem.
+
+#### 1 — Host backend (systemd)
 
 ```bash
-docker build -t hermes-thin-client .
-docker run -d --name hermes-thin --restart unless-stopped \
-  -v $HOME/.hermes:/root/.hermes \
-  -e AUTH_PASSWORD=changeme \
-  -e HERMES_HOME=/root/.hermes \
-  -p 8000:8000 \
+sudo cp deploy/hermes-thin-client-backend.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hermes-thin-client-backend.service
+```
+
+Backend listens on port **8001** (not exposed to the internet).
+
+#### 2 — Container (SPA + API proxy)
+
+```bash
+docker build --no-cache-filter=frontend -t hermes-thin-client .
+docker run -d --name hermes-ndrs-es --restart unless-stopped \
+  -e BACKEND_HOST=172.17.0.1 \
+  -e BACKEND_PORT=8001 \
+  -l traefik.enable=true \
+  -l traefik.frontend.rule=Host=hermes.yourdomain.com \
+  -l traefik.port=8000 \
+  -l traefik.protocol=http \
   hermes-thin-client
 ```
+
+The container serves the SPA and proxies `/api/*` to the host. Traefik terminates TLS.
+
+> `BACKEND_HOST` is typically `172.17.0.1` (Docker gateway). On macOS/Windows use `host.docker.internal`.
 
 ### Configuration
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `AUTH_PASSWORD` | `changeme` | Login password |
+| `AUTH_PASSWORD` | `changeme` | Login password (required) |
 | `HERMES_HOME` | `~/.hermes` | Hermes Agent data directory |
-| `HERMES_SRC` | `$HERMES_HOME/hermes-agent` | Hermes source path (editable install) |
+| `HERMES_SRC` | `$HERMES_HOME/hermes-agent` | Hermes Agent source path |
 | `PORT` | `8000` | HTTP listen port |
 
-## Project structure
+---
 
-```
-├── backend/          FastAPI app (modular package)
-├── frontend/         Vue 3 + Vite + Pinia + Tailwind
-└── Dockerfile
-```
+## Dev
 
-See [AGENTS.md](AGENTS.md) for detailed agent/developer knowledge base.
+```bash
+# Backend (hot-reload on Python changes)
+cd backend
+HERMES_HOME=$HOME/.hermes \
+HERMES_SRC=$HOME/.hermes/hermes-agent \
+AUTH_PASSWORD=changeme \
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Frontend (HMR, access via localhost:5173)
+cd frontend
+npm run dev
+
+# Container rebuild (when frontend changes)
+docker build -t hermes-thin-client .
+docker run -d --name hermes-ndrs-es --restart unless-stopped \
+  -e BACKEND_HOST=172.17.0.1 \
+  -e BACKEND_PORT=8001 \
+  -l traefik.enable=true \
+  -l traefik.frontend.rule=Host=hermes.yourdomain.com \
+  -l traefik.port=8000 \
+  -l traefik.protocol=http \
+  hermes-thin-client
+```

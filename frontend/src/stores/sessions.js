@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useChatStore } from './chat'
 
 export const useSessionsStore = defineStore('sessions', () => {
   // --- State ---
@@ -71,7 +72,13 @@ export const useSessionsStore = defineStore('sessions', () => {
         credentials: 'same-origin',
       })
       if (!res.ok) throw new Error(await res.text())
-      allMessages.value = (await res.json()).messages || []
+      const data = await res.json()
+      allMessages.value = data.messages || []
+      // Update the chat store's current model from the session
+      const chatStore = useChatStore()
+      if (data.model) {
+        chatStore.setCurrentModel(data.model)
+      }
     } catch (e) {
       sidebarError.value = 'Error: ' + e.message
       allMessages.value = []

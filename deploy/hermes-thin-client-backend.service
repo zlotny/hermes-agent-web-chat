@@ -1,0 +1,22 @@
+[Unit]
+Description=Hermes Thin Client Backend (host process)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ndrs
+WorkingDirectory=/home/ndrs/hermes-agent-thin-client/backend
+
+Environment=HERMES_HOME=/home/ndrs/.hermes
+Environment=HERMES_SRC=/home/ndrs/.hermes/hermes-agent
+Environment=AUTH_PASSWORD=lWDe0pYPJAvzGrGi
+Environment=PORT=8001
+
+ExecStart=/home/ndrs/.hermes/hermes-agent/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8001
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

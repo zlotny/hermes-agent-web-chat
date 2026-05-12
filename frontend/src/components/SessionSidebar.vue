@@ -57,6 +57,7 @@
             :key="s.id"
             :session="s"
             :is-active="s.id === sessionsStore.currentSessionId"
+            :agent-active="chatStore.isSessionActive(s.id)"
             @select="loadSession(s.id)"
           />
           <button
@@ -93,6 +94,7 @@
 
 <script>
 import { useSessionsStore } from '../stores/sessions'
+import { useChatStore } from '../stores/chat'
 import SessionItem from './SessionItem.vue'
 import SettingsFooter from './SettingsFooter.vue'
 
@@ -104,7 +106,7 @@ export default {
   },
   emits: ['close'],
   setup() {
-    return { sessionsStore: useSessionsStore() }
+    return { sessionsStore: useSessionsStore(), chatStore: useChatStore() }
   },
   watch: {
     'sessionsStore.searchQuery'(q) {

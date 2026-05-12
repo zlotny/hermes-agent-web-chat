@@ -9,7 +9,14 @@
     ]"
   >
     <div class="truncate text-[13px] mb-0.5 flex items-center gap-1.5">
+      <!-- Active pulsing dot -->
+      <span
+        v-if="agentActive"
+        class="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0"
+        title="Agent is generating..."
+      ></span>
       <svg
+        v-else
         xmlns="http://www.w3.org/2000/svg"
         width="12"
         height="12"
@@ -42,6 +49,7 @@ export default {
   props: {
     session: { type: Object, required: true },
     isActive: { type: Boolean, default: false },
+    agentActive: { type: Boolean, default: false },
   },
   emits: ['select'],
   methods: {
