@@ -2,13 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark theme defaults */
+/* ── CSS Custom Properties (theme variables) ── */
+
+/* Light theme (default — also used when 'system' prefers light) */
+:root {
+  --color-app-bg: 255 255 255;
+  --color-default: 31 35 40;
+  --color-surface: 246 248 250;
+  --color-border: 208 215 222;
+  --color-text-muted: 101 109 118;
+  --color-accent: 9 105 218;
+  --color-hover-bg: 232 236 240;
+  --color-code-bg: 246 248 250;
+  --color-panel: 255 255 255;
+  --color-scrollbar-thumb: 193 199 205;
+  --color-scrollbar-thumb-hover: 168 174 180;
+  --color-skel-from: 232 236 240;
+  --color-skel-to: 208 215 222;
+}
+
+/* Dark theme */
+html.dark {
+  --color-app-bg: 13 17 23;
+  --color-default: 201 209 217;
+  --color-surface: 22 27 34;
+  --color-border: 48 54 61;
+  --color-text-muted: 139 148 158;
+  --color-accent: 88 166 255;
+  --color-hover-bg: 28 35 51;
+  --color-code-bg: 13 17 23;
+  --color-panel: 22 27 34;
+  --color-scrollbar-thumb: 48 54 61;
+  --color-scrollbar-thumb-hover: 72 79 88;
+  --color-skel-from: 28 35 51;
+  --color-skel-to: 45 58 82;
+}
+
+/* ── Base body ── */
 body {
-  @apply bg-[#0d1117] text-[#c9d1d9] font-sans antialiased;
+  @apply bg-app-bg text-default font-sans antialiased;
   margin: 0;
 }
 
-/* Scrollbar styling — minimal, dark, narrow */
+/* ── Scrollbar styling — minimal ── */
 ::-webkit-scrollbar {
   width: 3px;
   height: 3px;
@@ -19,17 +55,17 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: rgb(var(--color-scrollbar-thumb));
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: rgb(var(--color-scrollbar-thumb-hover));
 }
 
-/* Code block styling */
+/* ── Code block styling ── */
 pre {
-  @apply bg-[#0d1117] border border-[#30363d] rounded p-2 overflow-x-auto text-sm;
+  @apply bg-code-bg border border-border rounded p-2 overflow-x-auto text-sm;
   font-family: 'SF Mono', 'Fira Code', monospace;
   margin: 8px 0;
   max-width: 100%;
@@ -37,7 +73,7 @@ pre {
 }
 
 code {
-  @apply bg-[#0d1117] px-1 rounded text-sm;
+  @apply bg-code-bg px-1 rounded text-sm;
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
@@ -45,7 +81,7 @@ pre code {
   @apply bg-transparent p-0;
 }
 
-/* Skeleton shimmer animation */
+/* ── Skeleton shimmer animation ── */
 @keyframes shimmer {
   0% {
     background-position: 200% 0;
@@ -57,7 +93,10 @@ pre code {
 }
 
 .skel {
-  background: linear-gradient(90deg, #1c2333 25%, #2d3a52 50%, #1c2333 75%);
+  background: linear-gradient(90deg,
+      rgb(var(--color-skel-from)) 25%,
+      rgb(var(--color-skel-to)) 50%,
+      rgb(var(--color-skel-from)) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;

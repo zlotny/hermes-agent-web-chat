@@ -1,13 +1,13 @@
 <template>
   <div class="group relative inline-flex">
     <span
-      class="text-[11px] bg-[#1c2333] border border-border rounded-md px-2 py-0.5 text-muted cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-[#c9d1d9]"
+      class="text-[11px] bg-hover-bg border border-border rounded-md px-2 py-0.5 text-muted cursor-default whitespace-nowrap transition-colors group-hover:border-accent/40 group-hover:text-default"
     >
       <span class="text-muted/60">{{ toolName }}</span>
       <span v-if="argPreview" class="text-muted/40 ml-1">{{ argPreview }}</span>
     </span>
     <div
-      class="absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-280px-4rem)] p-3 rounded-lg bg-[#0d1117] border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto"
+      class="absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-280px-4rem)] p-3 rounded-lg bg-app-bg border border-border shadow-2xl shadow-black/40 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 text-xs leading-relaxed max-h-60 overflow-y-auto"
     >
       <div class="font-semibold text-accent mb-1 text-[11px]">{{ toolName }}</div>
       <div v-if="argsStr" class="text-muted mb-2">

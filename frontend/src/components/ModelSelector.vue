@@ -3,7 +3,7 @@
     <!-- Trigger: current model badge -->
     <button
       @click="toggleDropdown"
-      class="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-surface/60 border border-border/50 text-muted hover:text-[#c9d1d9] hover:border-accent/40 hover:bg-surface transition-all cursor-pointer whitespace-nowrap"
+      class="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-surface/60 border border-border/50 text-muted hover:text-default hover:border-accent/40 hover:bg-surface transition-all cursor-pointer whitespace-nowrap"
       :title="'Current model: ' + (currentModel || 'default')"
     >
       <svg
@@ -48,7 +48,7 @@
       v-if="open"
       @click.stop
       :style="{ ...dropdownStyle, pointerEvents: 'auto' }"
-      class="z-[9999] w-[320px] max-h-[400px] bg-[#161b22] border border-border/80 rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
+      class="z-[9999] w-[320px] max-h-[400px] bg-surface border border-border/80 rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
       @mousedown.stop
     >
       <!-- Header -->
@@ -58,7 +58,7 @@
         <span>Switch Model</span>
         <button
           @click="open = false"
-          class="p-0.5 rounded hover:bg-[#1c2333] text-muted hover:text-[#c9d1d9] transition-colors cursor-pointer"
+          class="p-0.5 rounded hover:bg-hover-bg text-muted hover:text-default transition-colors cursor-pointer"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -112,10 +112,10 @@
           :key="p.slug"
           :ref="(el) => { if (el) providerRefs[pi] = el }"
           @click="selectProvider(p)"
-          class="w-full flex items-center justify-between px-3 py-2.5 text-xs hover:bg-[#1c2333] transition-colors text-left border-b border-border/30 last:border-b-0 cursor-pointer"
+          class="w-full flex items-center justify-between px-3 py-2.5 text-xs hover:bg-hover-bg transition-colors text-left border-b border-border/30 last:border-b-0 cursor-pointer"
           :class="[
-            p.is_current ? 'text-[#79c0ff]' : 'text-[#c9d1d9]',
-            focusedIndex === pi ? 'bg-[#1c2333] ring-1 ring-accent/40' : ''
+            p.is_current ? 'text-accent' : 'text-default',
+            focusedIndex === pi ? 'bg-hover-bg ring-1 ring-accent/40' : ''
           ]"
         >
           <div class="flex items-center gap-2">
@@ -156,7 +156,7 @@
         <!-- Back button -->
         <button
           @click="selectedProviderSlug = null; focusedIndex = 0"
-          class="w-full flex items-center gap-1.5 px-3 py-2 text-xs text-muted hover:text-[#c9d1d9] hover:bg-[#1c2333] transition-colors border-b border-border/30 cursor-pointer"
+          class="w-full flex items-center gap-1.5 px-3 py-2 text-xs text-muted hover:text-default hover:bg-hover-bg transition-colors border-b border-border/30 cursor-pointer"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -180,7 +180,7 @@
             v-model="modelSearch"
             type="text"
             placeholder="Type to search all models…"
-            class="w-full bg-[#0d1117] border border-border/60 rounded-md px-2.5 py-1.5 text-xs text-[#c9d1d9] outline-none placeholder:text-muted/50 focus:border-accent/50 transition-colors"
+            class="w-full bg-app-bg border border-border/60 rounded-md px-2.5 py-1.5 text-xs text-default outline-none placeholder:text-muted/50 focus:border-accent/50 transition-colors"
             ref="searchRef"
             @keydown.stop="onSearchKeydown"
           />
@@ -214,10 +214,10 @@
               :key="m"
               :ref="(el) => { if (el) modelRefs[displayModels.indexOf(m)] = el }"
               @click="pickModel(m)"
-              class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[#1c2333] transition-colors text-left cursor-pointer"
+              class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-hover-bg transition-colors text-left cursor-pointer"
               :class="[
-                isActiveModel(m) ? 'text-[#79c0ff]' : 'text-[#c9d1d9]',
-                focusedIndex === displayModels.indexOf(m) ? 'bg-[#1c2333] ring-1 ring-accent/40' : ''
+                isActiveModel(m) ? 'text-accent' : 'text-default',
+                focusedIndex === displayModels.indexOf(m) ? 'bg-hover-bg ring-1 ring-accent/40' : ''
               ]"
             >
               <span v-if="isActiveModel(m)" class="text-accent flex-shrink-0">

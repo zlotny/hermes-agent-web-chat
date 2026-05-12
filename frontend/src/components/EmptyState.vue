@@ -2,10 +2,10 @@
   <div class="flex flex-col items-center justify-center min-h-full px-4 py-12">
     <div class="mb-6">
       <div class="w-20 h-20 rounded-2xl bg-[#e6e6e6] border border-border/70 flex items-center justify-center">
-        <img src="/nousresearch.svg" alt="NousResearch" class="w-12 h-12 text-muted" />
+        <img src="/nousresearch.svg" alt="NousResearch" class="w-12 h-12" />
       </div>
     </div>
-    <h1 class="text-xl font-semibold text-[#c9d1d9] mb-1">
+    <h1 class="text-xl font-semibold text-default mb-1">
       Start a conversation
     </h1>
     <p class="text-sm text-muted mb-8">

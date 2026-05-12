@@ -20,7 +20,7 @@
         :placeholder="placeholder"
         @keydown.enter.exact.prevent="$emit('send')"
         @input="resize"
-        class="flex-1 bg-transparent text-[#c9d1d9] px-3 py-2.5 text-sm outline-none resize-none min-h-[44px] max-h-[200px] leading-relaxed placeholder:text-muted/60"
+        class="flex-1 bg-transparent text-default px-3 py-2.5 text-sm outline-none resize-none min-h-[44px] max-h-[200px] leading-relaxed placeholder:text-muted/60"
       ></textarea>
       <button
         v-if="sending"

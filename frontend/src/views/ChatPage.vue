@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex h-screen bg-[#0d1117] text-[#c9d1d9] overflow-hidden relative"
+    class="flex h-screen bg-app-bg text-default overflow-hidden relative"
   >
     <!-- Sidebar overlay (mobile) -->
     <div
@@ -20,7 +20,7 @@
     <button
       v-if="isDesktop && !sidebarOpen"
       @click="sidebarOpen = true"
-      class="absolute left-3 top-3 z-10 p-2 rounded-md bg-surface border border-border text-muted hover:text-[#c9d1d9] transition-colors"
+      class="absolute left-3 top-3 z-10 p-2 rounded-md bg-surface border border-border text-muted hover:text-default transition-colors"
       title="Open sidebar"
     >
       <svg
@@ -49,7 +49,7 @@
       >
         <button
           @click="sidebarOpen = true"
-          class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted transition-colors"
+          class="p-1.5 rounded-md hover:bg-hover-bg text-muted transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -70,7 +70,7 @@
         <h1 class="text-sm font-semibold text-muted">Hermes</h1>
         <button
           @click="sessionsStore.newChat()"
-          class="p-1.5 rounded-md hover:bg-[#1c2333] text-muted transition-colors"
+          class="p-1.5 rounded-md hover:bg-hover-bg text-muted transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -155,7 +155,7 @@
           currentStream.streamingMsg ||
           currentStream.status
         "
-        class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0d1117]/90 via-[#0d1117]/60 to-transparent pt-8 pb-4 px-4 pointer-events-none"
+        class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-app-bg/90 via-app-bg/60 to-transparent pt-8 pb-4 px-4 pointer-events-none"
       >
         <div
           class="max-w-[800px] w-full mx-auto px-2 sm:px-0 pointer-events-auto relative"
@@ -164,7 +164,7 @@
           <button
             v-if="!atBottom"
             @click="scrollToBottomSmooth"
-            class="absolute -top-12 right-0 z-20 p-2 rounded-full bg-surface/80 backdrop-blur-sm border border-border/60 text-muted/60 hover:text-[#c9d1d9] hover:border-accent/40 transition-all shadow-lg shadow-black/20"
+            class="absolute -top-12 right-0 z-20 p-2 rounded-full bg-surface/80 backdrop-blur-sm border border-border/60 text-muted/60 hover:text-default hover:border-accent/40 transition-all shadow-lg shadow-black/20"
             title="Scroll to bottom"
           >
             <svg
