@@ -5,4 +5,4 @@ venv
 dist/
 node_modules/
 .plan.md
-issues_to_review.md
+AGENTS.md

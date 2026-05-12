@@ -17,19 +17,19 @@
 </template>
 
 <script>
+import { useAuthStore } from '../stores/auth'
+
 export default {
+  setup() {
+    return { authStore: useAuthStore() }
+  },
   data() { return { password: '', error: '', loading: false } },
   methods: {
     async login() {
       this.error = ''
       this.loading = true
       try {
-        const res = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: this.password }),
-        })
-        if (!res.ok) throw new Error('Invalid password')
+        await this.authStore.login(this.password)
         this.$router.push('/')
       } catch (e) { this.error = e.message }
       finally { this.loading = false }

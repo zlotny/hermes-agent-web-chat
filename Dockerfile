@@ -14,6 +14,7 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/main.py .
+COPY backend/app/ ./app/
 
 # Copy built frontend
 COPY --from=frontend /build/dist /app/frontend/dist

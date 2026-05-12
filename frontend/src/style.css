@@ -8,11 +8,24 @@ body {
   margin: 0;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #484f58; }
+/* Scrollbar styling — minimal, dark, narrow */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
 
 /* Code block styling */
 pre {
@@ -20,22 +33,69 @@ pre {
   font-family: 'SF Mono', 'Fira Code', monospace;
   margin: 8px 0;
   max-width: 100%;
-    overflow-wrap: anywhere;
-  }
+  overflow-wrap: anywhere;
+}
+
 code {
   @apply bg-[#0d1117] px-1 rounded text-sm;
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
-pre code { @apply bg-transparent p-0; }
+
+pre code {
+  @apply bg-transparent p-0;
+}
 
 /* Skeleton shimmer animation */
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
+
 .skel {
   background: linear-gradient(90deg, #1c2333 25%, #2d3a52 50%, #1c2333 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
+}
+
+/* Blinking cursor for streaming text */
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-blink {
+  animation: blink 0.8s step-end infinite;
+}
+
+/* Animated thinking dots */
+@keyframes pulse-dot {
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
 }
