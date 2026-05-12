@@ -19,6 +19,8 @@
         :current-model="chatStore.currentModel"
         :providers="chatStore.availableProviders"
         :providers-loading="chatStore.providersLoading"
+        :available-commands="chatStore.availableCommands"
+        :commands-loading="chatStore.commandsLoading"
         @send="$emit('send')"
         @select-model="(model) => $emit('select-model', model)"
       />

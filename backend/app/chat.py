@@ -3,6 +3,9 @@
 import json
 import queue as _queue
 import asyncio
+import io
+import contextlib
+import logging
 import time
 from typing import AsyncGenerator, Optional
 
@@ -12,6 +15,8 @@ from pydantic import BaseModel
 
 from app.dependencies import get_db
 from app.utils import default_model, agent_is_available
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -33,6 +38,104 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     model: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Slash command detection — mirrors cli.py's _looks_like_slash_command()
+# ---------------------------------------------------------------------------
+def _looks_like_slash_command(text: str) -> bool:
+    """Return True if *text* looks like a slash command, not a file path."""
+    if not text or not text.startswith("/"):
+        return False
+    first_word = text.split()[0]
+    # After stripping the leading /, a command name has no slashes.
+    # A path like /Users/foo/bar.md always does.
+    return "/" not in first_word[1:]
+
+
+# ---------------------------------------------------------------------------
+# Generic command dispatch via HermesCLI.process_command()
+# ---------------------------------------------------------------------------
+async def _run_cli_command(
+    message_text: str,
+    req: ChatRequest,
+    q: _queue.Queue,
+    result_holder: dict,
+) -> None:
+    """Dispatch a slash command through HermesCLI.process_command() generically.
+
+    Exactly like tui_gateway/slash_worker.py — creates a lightweight
+    HermesCLI, calls process_command(), captures text output, streams
+    it back. Works for ALL commands: built-in, skills, plugins.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        def _run():
+            import io
+            import contextlib
+            import cli as cli_mod
+            from cli import HermesCLI
+            from rich.console import Console
+
+            sid = req.session_id
+            cli = HermesCLI(
+                model=req.model or default_model(),
+                compact=True,
+                resume=sid if sid else None,
+                verbose=False,
+            )
+
+            buf = io.StringIO()
+            # Rich Console captures its file handle at construction time, so
+            # contextlib.redirect_stdout won't affect it. Swap the console's
+            # underlying file to our buffer so self.console.print() is captured.
+            cli.console = Console(file=buf, force_terminal=True, width=120)
+
+            # Also redirect _cprint (prompt_toolkit output) to plain print()
+            old = getattr(cli_mod, "_cprint", None)
+            if old is not None:
+                cli_mod._cprint = lambda text: print(text)  # goes to buf via redirect
+
+            cmd = message_text
+            if not cmd.startswith("/"):
+                cmd = f"/{cmd}"
+
+            try:
+                with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                    cli.process_command(cmd)
+            finally:
+                if old is not None:
+                    cli_mod._cprint = old
+
+            output = buf.getvalue().rstrip()
+
+            # ── Post-dispatch DB persistence ────────────────────────
+            # /model <name> — persist to session DB so the model badge
+            # shows the new model after the stream completes.
+            if sid and cmd.startswith("/model ") and " " in cmd:
+                model_name = cmd.split(None, 1)[1].strip().split()[0]
+                if model_name:
+                    try:
+                        _db = get_db()
+                        _db._conn.execute(
+                            "UPDATE sessions SET model = ? WHERE id = ?",
+                            (model_name, sid),
+                        )
+                        _db._conn.commit()
+                    except Exception:
+                        pass
+
+            return output
+
+        output = await loop.run_in_executor(None, _run)
+        if output:
+            q.put_nowait(("token", output))
+        result_holder["session_id"] = req.session_id or ""
+    except Exception as e:
+        logger.warning("Command dispatch failed: %s", e)
+        q.put_nowait(("token", f"Command failed: {e}"))
+    finally:
+        q.put_nowait(("done", None))
 
 
 @router.get("/api/chat/active")
@@ -163,6 +266,55 @@ async def chat_stream(req: ChatRequest):
             _stop_events[stream_sid] = stop_event
         else:
             stop_event.clear()
+
+    # ------------------------------------------------------------------
+    # Slash command interception — if it looks like a command, resolve it
+    # and dispatch through HermesCLI.process_command() generically.
+    # Only unrecognized text reaches the LLM.
+    # ------------------------------------------------------------------
+    message_text = req.message or ""
+    if _looks_like_slash_command(message_text):
+        cmd_name = message_text.split()[0].lstrip("/").lower()
+        # Try resolving via COMMAND_REGISTRY or skill commands
+        is_command = False
+        try:
+            from hermes_cli.commands import resolve_command
+            is_command = resolve_command(cmd_name) is not None
+        except Exception:
+            pass
+        if not is_command:
+            try:
+                from agent.skill_commands import get_skill_commands
+                is_command = f"/{cmd_name}" in get_skill_commands()
+            except Exception:
+                pass
+
+        if is_command:
+            asyncio.create_task(_run_cli_command(
+                message_text, req, q, result_holder,
+            ))
+            async def command_generate() -> AsyncGenerator[str, None]:
+                try:
+                    while True:
+                        try:
+                            kind, payload = await loop.run_in_executor(
+                                None, lambda: q.get(timeout=1.0)
+                            )
+                        except (_queue.Empty, asyncio.TimeoutError):
+                            continue
+                        if kind == "token":
+                            yield f"data: {json.dumps({'token': payload})}\n\n"
+                        elif kind == "done":
+                            sid = result_holder.get("session_id", "") or stream_sid
+                            yield f"data: {json.dumps({'done': True, 'session_id': sid})}\n\n"
+                            break
+                        elif kind == "error":
+                            yield f"data: {json.dumps({'error': payload})}\n\n"
+                            break
+                finally:
+                    async with _stop_events_lock:
+                        _stop_events.pop(stream_sid, None)
+            return StreamingResponse(command_generate(), media_type="text/event-stream")
 
     # ------------------------------------------------------------------
     # Agent runner (runs in thread executor)

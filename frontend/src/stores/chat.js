@@ -231,6 +231,49 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Commands
+  // ---------------------------------------------------------------------------
+
+  const availableCommands = ref([])
+  const commandsLoading = ref(false)
+
+  async function fetchCommands() {
+    commandsLoading.value = true
+    try {
+      const res = await fetch('/api/commands', { credentials: 'same-origin' })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      availableCommands.value = data.commands || []
+    } catch (e) {
+      console.warn('Failed to fetch commands:', e)
+      availableCommands.value = []
+    } finally {
+      commandsLoading.value = false
+    }
+  }
+
+  /**
+   * Get commands whose name or alias starts with the given prefix (without /).
+   * Returns up to `limit` results, grouped by category.
+   */
+  function getCommandsByPrefix(prefix) {
+    const q = prefix.toLowerCase().replace(/^[/\s]+/, '')
+    if (!q) return availableCommands.value
+
+    const seen = new Set()
+    const results = []
+    for (const cmd of availableCommands.value) {
+      if (seen.has(cmd.name)) continue
+      const names = [cmd.name, ...(cmd.aliases || [])]
+      if (names.some(n => n.toLowerCase().startsWith(q))) {
+        results.push(cmd)
+        seen.add(cmd.name)
+      }
+    }
+    return results
+  }
+
   async function abortStream(sessionId) {
     if (!sessionId) return
     // Tell the backend to stop the agent.
@@ -448,7 +491,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       if (shouldReload && onSessionUpdate) {
-        onSessionUpdate(lastSessionId)
+        onSessionUpdate(lastSessionId, message)
       }
     } catch (e) {
       if (e.name === 'AbortError') {
@@ -475,6 +518,9 @@ export const useChatStore = defineStore('chat', () => {
     selectedProvider,
     providersLoading,
     modelSelectorOpen,
+    // commands
+    availableCommands,
+    commandsLoading,
     // active sessions
     activeSessions,
     locallyCompletedSessions,
@@ -500,5 +546,7 @@ export const useChatStore = defineStore('chat', () => {
     abortStream,
     fetchActiveSessions,
     isSessionActive,
+    fetchCommands,
+    getCommandsByPrefix,
   }
 })

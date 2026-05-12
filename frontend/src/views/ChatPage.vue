@@ -190,6 +190,8 @@
             :current-model="chatStore.currentModel"
             :providers="chatStore.availableProviders"
             :providers-loading="chatStore.providersLoading"
+            :available-commands="chatStore.availableCommands"
+            :commands-loading="chatStore.commandsLoading"
             @send="sendMessage"
             @select-model="onModelSelect"
             @stop="onStop"
@@ -240,6 +242,7 @@ export default {
         this.sessionsStore.loadSessions();
         this.chatStore.fetchProviders().then(() => this.loadDefaultModel());
         this.chatStore.fetchDefaultModel().then(() => this.loadDefaultModel());
+        this.chatStore.fetchCommands();
         // Start polling active sessions for reload resilience
         this.startActiveSessionPolling();
         // Focus the chat input after DOM settles
@@ -332,7 +335,7 @@ export default {
       await this.chatStore.sendMessage({
         message: text,
         sessionId: sendingSessionId,
-        onSessionUpdate: (newSessionId) => {
+        onSessionUpdate: (newSessionId, sentMessage) => {
           // Only update the UI if the user hasn't navigated away from this
           // session during streaming.
           const currentId = this.sessionsStore.currentSessionId;
@@ -354,6 +357,10 @@ export default {
             }
             if (newSessionId && newSessionId !== currentId) {
               this.loadSessionModel(newSessionId);
+            }
+            // If this was a /model command, refresh the model selector badge
+            if (sentMessage && sentMessage.startsWith('/model ')) {
+              this.loadSessionModel(resolvedId);
             }
             this.sessionsStore.currentSessionId = resolvedId;
             this.sessionsStore.loadSessions();
@@ -396,12 +403,25 @@ export default {
         // Ignore errors
       }
     },
-    /** Handle model selection from the ModelSelector dropdown. */
+    /** Handle model selection from the ModelSelector dropdown.
+     *  Sends a /model command through the chat stream so the user sees
+     *  feedback ("✓ Model switched to...") and the model badge updates. */
     async onModelSelect(model) {
       this.chatStore.setCurrentModel(model);
       const sessionId = this.sessionsStore.currentSessionId;
       if (sessionId) {
-        await this.chatStore.updateSessionModel(sessionId, model);
+        // Prefer sending via the SSE stream for feedback, but fall back
+        // to the silent API call if we're already streaming.
+        const state = this.chatStore.getStreamState(sessionId);
+        if (!state.sending) {
+          const prev = this.chatStore.inputText;
+          this.chatStore.inputText = `/model ${model}`;
+          this.sendMessage();
+          this.chatStore.inputText = prev;
+        } else {
+          await this.chatStore.updateSessionModel(sessionId, model);
+          this.loadSessionModel(sessionId);
+        }
       }
     },
     focusChatInput() {
