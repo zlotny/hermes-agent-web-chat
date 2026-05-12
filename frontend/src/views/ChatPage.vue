@@ -125,6 +125,7 @@
 
         <!-- Empty state -->
         <EmptyState
+          ref="emptyState"
           v-if="
             !sessionsStore.allMessages.length &&
             !currentStream.streamingMsg &&
@@ -182,6 +183,7 @@
             </svg>
           </button>
           <ChatInput
+            ref="floatingChatInput"
             v-model="chatStore.inputText"
             :disabled="currentStream.sending"
             :sending="currentStream.sending"
@@ -240,6 +242,8 @@ export default {
         this.chatStore.fetchDefaultModel().then(() => this.loadDefaultModel());
         // Start polling active sessions for reload resilience
         this.startActiveSessionPolling();
+        // Focus the chat input after DOM settles
+        setTimeout(() => this.focusChatInput(), 200);
       } else this.$router.push("/login");
     });
   },
@@ -253,6 +257,8 @@ export default {
       if (!newId) {
         this.loadDefaultModel();
       }
+      // Focus the input after a short delay to let the DOM settle
+      setTimeout(() => this.focusChatInput(), 100);
       // Clear reconnecting banner debounce on session switch
       this._resetBannerDebounce();
     },
@@ -396,6 +402,17 @@ export default {
       const sessionId = this.sessionsStore.currentSessionId;
       if (sessionId) {
         await this.chatStore.updateSessionModel(sessionId, model);
+      }
+    },
+    focusChatInput() {
+      // If messages exist, the floating input is visible—focus it
+      if (this.$refs.floatingChatInput) {
+        this.$refs.floatingChatInput.focus();
+        return
+      }
+      // Otherwise the EmptyState input is visible—focus through that component
+      if (this.$refs.emptyState) {
+        this.$refs.emptyState.focusInput();
       }
     },
     /** Handle stop/abort button press. */

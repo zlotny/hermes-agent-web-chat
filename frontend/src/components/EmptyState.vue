@@ -1,27 +1,15 @@
 <template>
   <div class="flex flex-col items-center justify-center min-h-full px-4 py-12">
-    <div class="mb-2 text-accent">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="40"
-        height="40"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path
-          d="M12 2a10 10 0 0 1 10 10c0 5-4 8-10 8-2.5 0-4.8-.8-6.7-2.2L2 22l1.8-4.5A9.8 9.8 0 0 1 2 12 10 10 0 0 1 12 2z"
-        />
-      </svg>
+    <div class="mb-6">
+      <div class="w-20 h-20 rounded-2xl bg-[#e6e6e6] border border-border/70 flex items-center justify-center">
+        <img src="/nousresearch.svg" alt="NousResearch" class="w-12 h-12 text-muted" />
+      </div>
     </div>
     <h1 class="text-xl font-semibold text-[#c9d1d9] mb-1">
-      How can I help you?
+      Start a conversation
     </h1>
     <p class="text-sm text-muted mb-8">
-      Start a conversation with your AI assistant
+      Starting a conversation here will start a new session
     </p>
     <div class="w-full max-w-[640px]">
       <ChatInput
@@ -34,9 +22,6 @@
         @send="$emit('send')"
         @select-model="(model) => $emit('select-model', model)"
       />
-      <p class="text-[11px] text-muted/50 text-center mt-3">
-        Hermes may produce inaccurate information. Verify important facts.
-      </p>
     </div>
   </div>
 </template>
