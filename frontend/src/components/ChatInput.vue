@@ -11,12 +11,12 @@
       />
     </div>
     <div
-      class="flex gap-1.5 bg-surface/95 backdrop-blur-sm border border-border/80 rounded-xl p-2 shadow-lg shadow-black/40 items-end"
+      class="flex gap-1.5 bg-surface/95 backdrop-blur-sm border border-border/80 p-2 shadow-lg shadow-black/50 items-end"
     >
       <!-- Command button (tiny, left side) -->
       <button
         @click="toggleCommandSelector"
-        class="self-center flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-muted/50 hover:text-accent hover:bg-hover-bg transition-colors cursor-pointer border-0"
+        class="self-center flex-shrink-0 w-7 h-7 flex items-center justify-center text-muted/50 hover:text-accent hover:bg-hover-bg transition-colors cursor-pointer border-0"
         title="Show commands (type /)"
       >
         <svg
@@ -51,7 +51,7 @@
       <button
         v-if="sending"
         @click="$emit('stop')"
-        class="self-center flex-shrink-0 p-2 rounded-lg bg-[#d97706] text-white hover:bg-[#b45309] transition-colors shadow-lg shadow-orange-900/30"
+        class="self-center flex-shrink-0 p-2 bg-[#d97706] text-white hover:bg-[#b45309] transition-colors shadow-lg shadow-orange-900/30"
         title="Stop agent"
       >
         <svg
@@ -68,7 +68,7 @@
         v-else
         @click="onSend"
         :disabled="disabled || !text.trim()"
-        class="self-center flex-shrink-0 p-2 rounded-lg bg-accent text-white hover:bg-[#79c0ff] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        class="self-center flex-shrink-0 p-2 bg-accent text-white hover:bg-[#c9a04a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

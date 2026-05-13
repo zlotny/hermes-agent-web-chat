@@ -3,7 +3,7 @@
     <!-- Trigger: current model badge -->
     <button
       @click="toggleDropdown"
-      class="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-surface/60 border border-border/50 text-muted hover:text-default hover:border-accent/40 hover:bg-surface transition-all cursor-pointer whitespace-nowrap"
+      class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium bg-surface/60 border border-border/50 text-muted hover:text-default hover:border-accent/40 hover:bg-surface transition-all cursor-pointer whitespace-nowrap"
       :title="'Current model: ' + (currentModel || 'default')"
     >
       <svg
@@ -48,17 +48,17 @@
       v-if="open"
       @click.stop
       :style="{ ...dropdownStyle, pointerEvents: 'auto' }"
-      class="z-[9999] w-[320px] max-h-[400px] bg-surface border border-border/80 rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
+      class="z-[9999] w-[320px] max-h-[400px] bg-surface border border-border/80 shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
       @mousedown.stop
     >
       <!-- Header -->
       <div
-        class="px-3 py-2 border-b border-border/50 text-xs font-semibold text-muted flex items-center justify-between"
+          class="px-3 py-2 border-b border-border/50 text-xs font-semibold text-muted flex items-center justify-between uppercase tracking-[0.1em]"
       >
         <span>Switch Model</span>
         <button
           @click="open = false"
-          class="p-0.5 rounded hover:bg-hover-bg text-muted hover:text-default transition-colors cursor-pointer"
+          class="p-0.5 hover:bg-hover-bg text-muted hover:text-default transition-colors cursor-pointer"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -180,7 +180,7 @@
             v-model="modelSearch"
             type="text"
             placeholder="Type to search all models…"
-            class="w-full bg-app-bg border border-border/60 rounded-md px-2.5 py-1.5 text-xs text-default outline-none placeholder:text-muted/50 focus:border-accent/50 transition-colors"
+            class="w-full bg-app-bg border border-border/60 px-2.5 py-1.5 text-xs text-default outline-none placeholder:text-muted/50 focus:border-accent/50 transition-colors"
             ref="searchRef"
             @keydown.stop="onSearchKeydown"
           />

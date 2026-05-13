@@ -9,13 +9,13 @@
     <!-- Popup anchored above the input -->
     <div
       :style="popupStyle"
-      class="absolute w-[380px] max-h-[min(50vh,420px)] bg-surface border border-border/80 rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
+      class="absolute w-[380px] max-h-[min(50vh,420px)] bg-surface border border-border/80 shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-dropdown-in"
       @mousedown.stop
       @click.stop
     >
       <!-- Header with count -->
       <div
-        class="px-3 py-2 border-b border-border/50 text-xs font-semibold text-muted flex items-center justify-between flex-shrink-0"
+        class="px-3 py-2 border-b border-border/50 text-xs font-semibold text-muted flex items-center justify-between flex-shrink-0 uppercase tracking-[0.1em]"
       >
         <span>Commands</span>
         <span class="font-normal text-muted/60">{{ filteredCommands.length }} available</span>

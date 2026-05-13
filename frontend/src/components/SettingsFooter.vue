@@ -2,7 +2,7 @@
   <div class="border-t border-border p-3 relative">
     <button
       @click="settingsOpen = !settingsOpen"
-      class="flex items-center gap-2 text-xs text-muted hover:text-default transition-colors w-full p-1.5 rounded-md hover:bg-hover-bg"
+      class="flex items-center gap-2 text-xs text-muted hover:text-default transition-colors w-full p-1.5 hover:bg-hover-bg"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -26,12 +26,12 @@
     <div
       v-if="settingsOpen"
       ref="settingsPanelRef"
-      class="absolute bottom-full left-3 mb-1 w-[240px] bg-panel border border-border rounded-lg shadow-xl shadow-black/30 p-2 z-50"
+      class="absolute bottom-full left-3 mb-1 w-[240px] bg-panel border border-border shadow-xl shadow-black/30 p-2 z-50"
     >
       <!-- Theme selector -->
       <div class="px-3 py-2">
         <div class="text-[10px] text-muted/60 uppercase tracking-wider mb-2 font-semibold">Theme</div>
-        <div class="flex rounded-md border border-border overflow-hidden">
+        <div class="flex border border-border overflow-hidden">
           <button
             v-for="opt in themeOptions"
             :key="opt.value"
@@ -55,7 +55,7 @@
 
       <!-- Show crons toggle -->
       <div
-        class="flex items-center justify-between px-3 py-2 rounded-md hover:bg-hover-bg cursor-pointer transition-colors"
+        class="flex items-center justify-between px-3 py-2 hover:bg-hover-bg cursor-pointer transition-colors"
         @click="sessionsStore.showCrons = !sessionsStore.showCrons"
       >
         <span class="text-xs">Show crons</span>
@@ -73,7 +73,7 @@
 
       <!-- Edit core files -->
       <div
-        class="flex items-center justify-between px-3 py-2 rounded-md hover:bg-hover-bg cursor-pointer transition-colors"
+          <div class="flex items-center justify-between px-3 py-2 hover:bg-hover-bg cursor-pointer transition-colors"
         @click="editorOpen = true"
       >
         <span class="text-xs">Edit core files</span>

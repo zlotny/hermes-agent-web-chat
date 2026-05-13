@@ -16,6 +16,11 @@ export default {
         'code-bg': 'rgb(var(--color-code-bg) / <alpha-value>)',
         default: 'rgb(var(--color-default) / <alpha-value>)',
         panel: 'rgb(var(--color-panel) / <alpha-value>)',
+        'warm-glow': 'rgb(var(--color-warm-glow) / <alpha-value>)',
+      },
+      fontFamily: {
+        sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+        mono: ['ui-monospace', '"SF Mono"', '"Cascadia Mono"', 'Menlo', 'Consolas', 'monospace'],
       },
     },
   },

@@ -2,7 +2,7 @@
   <div
     @click="$emit('select')"
     :class="[
-      'p-2.5 rounded-md cursor-pointer text-xs transition-all duration-200 relative overflow-hidden group',
+      'p-2.5 cursor-pointer text-xs transition-all duration-200 relative overflow-hidden group',
       isActive
         ? 'bg-hover-bg rainbow-active'
         : 'hover:bg-hover-bg',
@@ -37,7 +37,7 @@
       <!-- Default state: model + message count -->
       <span class="transition-opacity duration-200 flex items-center gap-1.5 min-w-0" :class="session.last_updated ? 'group-hover:opacity-0' : ''">
         <template v-if="session.model">
-          <span class="bg-app-bg border border-border rounded px-1 text-[10px] max-w-[140px] truncate">{{ shortModel(session.model) }}</span>
+          <span class="bg-app-bg border border-border px-1 text-[10px] max-w-[140px] truncate">{{ shortModel(session.model) }}</span>
           <span>{{ session.message_count }} msgs</span>
         </template>
         <span v-else>{{ session.message_count }} msgs</span>

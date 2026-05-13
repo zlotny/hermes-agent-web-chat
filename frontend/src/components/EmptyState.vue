@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col items-center justify-center min-h-full px-4 py-12">
     <div class="mb-6">
-      <div class="w-20 h-20 rounded-2xl bg-[#e6e6e6] border border-border/70 flex items-center justify-center">
+      <div class="w-20 h-20 bg-[#e8ddd0] dark:bg-[#ffe6cb] border border-border/70 flex items-center justify-center mb-4">
         <img src="/nousresearch.svg" alt="NousResearch" class="w-12 h-12" />
       </div>
     </div>

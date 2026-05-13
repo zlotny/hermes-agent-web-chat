@@ -9,7 +9,7 @@
         <span v-if="message.timestamp" class="text-[10px] font-normal normal-case text-muted/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{{ formatMsgTime(message.timestamp) }}</span>
         <span>You</span>
       </div>
-      <div class="bg-accent/10 border border-accent/20 px-4 py-3 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words">
+      <div class="bg-accent/10 border border-accent/20 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words">
         {{ message.content }}
       </div>
       <!-- Copy button -->
@@ -17,7 +17,7 @@
         <button
           title="Copy message"
           @click="copyContent"
-          class="p-1 rounded-md text-muted/40 hover:text-default hover:bg-hover-bg transition-all"
+          class="p-1 text-muted/40 hover:text-default hover:bg-hover-bg transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
@@ -31,8 +31,8 @@
     class="flex justify-center animate-fade-in"
   >
     <div class="max-w-[90%]">
-      <div class="text-[11px] font-semibold text-[#d29922]/80 uppercase tracking-wider mb-1 text-center">System</div>
-      <div class="bg-[#d29922]/5 border border-[#d29922]/20 px-4 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d29922]/70">
+      <div class="text-[11px] font-semibold text-[#d4a853]/80 uppercase tracking-wider mb-1 text-center">System</div>
+      <div class="bg-[#d4a853]/5 border border-[#d4a853]/20 px-4 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d4a853]/70">
         {{ message.content }}
       </div>
     </div>
@@ -55,7 +55,7 @@
         <button
           title="Copy message"
           @click="copyContent"
-          class="p-1 rounded-md text-muted/40 hover:text-default hover:bg-hover-bg transition-all"
+          class="p-1 text-muted/40 hover:text-default hover:bg-hover-bg transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>

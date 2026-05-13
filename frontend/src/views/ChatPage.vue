@@ -2,6 +2,11 @@
   <div
     class="flex h-screen bg-app-bg text-default overflow-hidden relative"
   >
+    <!-- Animated noise grain overlay -->
+    <div class="noise"></div>
+    <!-- Warm glow backdrop -->
+    <div class="warm-glow-bg"></div>
+
     <!-- Sidebar overlay (mobile) -->
     <div
       v-if="sidebarOpen && !isDesktop"
@@ -20,7 +25,7 @@
     <button
       v-if="isDesktop && !sidebarOpen"
       @click="sidebarOpen = true"
-      class="absolute left-3 top-3 z-10 p-2 rounded-md bg-surface border border-border text-muted hover:text-default transition-colors"
+      class="absolute left-3 top-3 z-10 p-2 bg-surface border border-border text-muted hover:text-default transition-colors"
       title="Open sidebar"
     >
       <svg
@@ -49,7 +54,7 @@
       >
         <button
           @click="sidebarOpen = true"
-          class="p-1.5 rounded-md hover:bg-hover-bg text-muted transition-colors"
+          class="p-1.5 hover:bg-hover-bg text-muted transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -70,7 +75,7 @@
         <h1 class="text-sm font-semibold text-muted">Hermes</h1>
         <button
           @click="sessionsStore.newChat()"
-          class="p-1.5 rounded-md hover:bg-hover-bg text-muted transition-colors"
+          class="p-1.5 hover:bg-hover-bg text-muted transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -98,7 +103,7 @@
         <!-- Reconnecting banner (shown on reload while agent is active) -->
         <div
           v-if="showReconnectingBanner"
-          class="sticky top-0 z-10 mx-4 mt-4 px-4 py-3 rounded-lg bg-orange-900/30 border border-orange-700/50 text-orange-300 text-xs flex items-center gap-2"
+          class="sticky top-0 z-10 mx-4 mt-4 px-4 py-3 bg-orange-900/30 border border-orange-700/50 text-orange-300 text-xs flex items-center gap-2"
         >
           <svg
             class="animate-spin h-3.5 w-3.5 flex-shrink-0"
@@ -181,7 +186,7 @@
           <button
             v-if="!atBottom"
             @click="scrollToBottomSmooth"
-            class="absolute -top-12 right-0 z-20 p-2 rounded-full bg-surface/80 backdrop-blur-sm border border-border/60 text-muted/60 hover:text-default hover:border-accent/40 transition-all shadow-lg shadow-black/20"
+            class="absolute -top-12 right-0 z-20 p-2 bg-surface/80 backdrop-blur-sm border border-border/60 text-muted/60 hover:text-default hover:border-accent/40 transition-all shadow-lg shadow-black/20"
             title="Scroll to bottom"
           >
             <svg

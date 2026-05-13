@@ -6,14 +6,14 @@
   >
     <div
       @mousedown.stop
-      class="bg-panel border border-border rounded-lg shadow-xl shadow-black/30 w-[700px] max-w-[95vw] max-h-[85vh] flex flex-col animate-dropdown-in"
+      class="bg-panel border border-border shadow-xl shadow-black/30 w-[700px] max-w-[95vw] max-h-[85vh] flex flex-col animate-dropdown-in"
     >
       <!-- Header -->
       <div class="flex items-center justify-between px-5 py-4 border-b border-border">
         <h2 class="text-sm font-semibold">Edit core files</h2>
         <button
           @click="emit('close')"
-          class="p-1 rounded-md hover:bg-hover-bg text-muted hover:text-default transition-colors"
+          class="p-1 hover:bg-hover-bg text-muted hover:text-default transition-colors"
           title="Close"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -29,7 +29,7 @@
           :key="tab"
           @click="switchTab(tab)"
           :class="[
-            'px-4 py-1.5 text-xs font-medium rounded-md transition-colors',
+            'px-4 py-1.5 text-xs font-medium transition-colors',
             activeTab === tab
               ? 'bg-accent text-white'
               : 'text-muted hover:text-default hover:bg-hover-bg'
@@ -51,7 +51,7 @@
         <textarea
           v-model="text"
           @mousedown.stop
-          class="w-full flex-1 min-h-[300px] bg-app-bg border border-border rounded-md p-3 text-sm font-mono text-default outline-none resize-none focus:border-accent/50 transition-colors"
+          class="w-full flex-1 min-h-[300px] bg-app-bg border border-border p-3 text-sm font-mono text-default outline-none resize-none focus:border-accent/50 transition-colors"
           placeholder="(empty file)"
           spellcheck="false"
         ></textarea>
@@ -70,7 +70,7 @@
           @click="saveFile(activeTab)"
           :disabled="saving"
           :class="[
-            'px-5 py-1.5 text-xs font-medium rounded-md transition-colors',
+            'px-5 py-1.5 text-xs font-medium transition-colors',
             saving
               ? 'bg-accent/50 text-white/50 cursor-not-allowed'
               : 'bg-accent text-white hover:bg-accent/90'
