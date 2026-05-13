@@ -284,9 +284,10 @@ export default {
       if (!newId) {
         this.loadDefaultModel();
       }
+      // Clear reconnecting banner debounce on session switch
+      this._resetBannerDebounce();
       // Focus the input after a short delay to let the DOM settle
       setTimeout(() => this.focusChatInput(), 100);
-      // Clear reconnecting banner debounce on session switch
       this._resetBannerDebounce();
     },
     "sessionsStore.showCrons"() {

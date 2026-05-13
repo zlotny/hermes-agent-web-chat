@@ -13,6 +13,7 @@ from app.sessions import router as sessions_router
 from app.chat import router as chat_router
 from app.providers import router as providers_router
 from app.commands import router as commands_router
+from app.core_files import router as core_files_router
 from app.static import setup_static_serving
 
 
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(providers_router)
     app.include_router(commands_router)
+    app.include_router(core_files_router)
 
     # ------------------------------------------------------------------
     # Static file serving (SPA)

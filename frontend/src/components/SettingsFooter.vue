@@ -67,21 +67,52 @@
           ></div>
         </div>
       </div>
+
+      <!-- Divider -->
+      <div class="border-t border-border mx-3"></div>
+
+      <!-- Edit core files -->
+      <div
+        class="flex items-center justify-between px-3 py-2 rounded-md hover:bg-hover-bg cursor-pointer transition-colors"
+        @click="editorOpen = true"
+      >
+        <span class="text-xs">Edit core files</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="text-muted/50"
+        >
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      </div>
     </div>
+
+    <CoreFileEditor :show="editorOpen" @close="editorOpen = false" />
   </div>
 </template>
 
 <script>
 import { useSessionsStore } from '../stores/sessions'
 import { useSettingsStore } from '../stores/settings'
+import CoreFileEditor from './CoreFileEditor.vue'
 
 export default {
+  components: { CoreFileEditor },
   setup() {
     return { sessionsStore: useSessionsStore(), settingsStore: useSettingsStore() }
   },
   data() {
     return {
       settingsOpen: false,
+      editorOpen: false,
       themeOptions: [
         {
           value: 'light',

@@ -472,6 +472,7 @@ export default {
       this.$emit("closed");
     },
     handleClickOutside(e) {
+      if (!this.open) return
       const el = this.$refs.containerRef;
       if (el && !el.contains(e.target)) {
         this.close();
