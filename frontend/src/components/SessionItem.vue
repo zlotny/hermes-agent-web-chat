@@ -2,7 +2,7 @@
   <div
     @click="$emit('select')"
     :class="[
-      'p-2.5 rounded-md cursor-pointer text-xs transition-all duration-200 relative overflow-hidden animate-slide-in group',
+      'p-2.5 rounded-md cursor-pointer text-xs transition-all duration-200 relative overflow-hidden group',
       isActive
         ? 'bg-hover-bg rainbow-active'
         : 'hover:bg-hover-bg',

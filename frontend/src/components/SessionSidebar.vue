@@ -123,8 +123,7 @@ export default {
     return { sessionsStore: useSessionsStore(), chatStore: useChatStore() }
   },
   watch: {
-    'sessionsStore.filteredSessions': {
-      deep: true,
+    'sessionsStore.filteredSessions.length': {
       async handler() {
         // Initial fill: if no scrollbar and more sessions exist, load more
         // until the sidebar is full or all sessions are loaded.

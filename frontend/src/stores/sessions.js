@@ -156,6 +156,40 @@ export const useSessionsStore = defineStore('sessions', () => {
     ]
   }
 
+  function replaceSessionId(oldId, newId) {
+    // Swap a temp placeholder ID for the real Hermes session ID in-place,
+    // preserving array identity so Vue doesn't re-render all SessionItems.
+    const idx = allSessions.value.findIndex(s => s.id === oldId)
+    if (idx !== -1) {
+      allSessions.value.splice(idx, 1, { ...allSessions.value[idx], id: newId })
+    }
+  }
+
+  async function updateSessionInPlace(sessionId) {
+    // Targeted refresh of a single session in the sidebar list
+    // without reloading all sessions — avoids flicker from full re-render.
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      const idx = allSessions.value.findIndex(s => s.id === sessionId)
+      if (idx !== -1) {
+        allSessions.value.splice(idx, 1, {
+          ...allSessions.value[idx],
+          id: data.id || sessionId,
+          title: data.title || allSessions.value[idx].title,
+          model: data.model || allSessions.value[idx].model,
+          message_count: data.message_count ?? allSessions.value[idx].message_count,
+          last_updated: data.last_updated || new Date().toISOString(),
+        })
+      }
+    } catch {
+      // Silently fail — next full loadSessions() will fix it
+    }
+  }
+
   function newChat() {
     currentSessionId.value = null
     allMessages.value = []
@@ -186,6 +220,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     saveMessageCache,
     clearMessageCache,
     addPlaceholderSession,
+    replaceSessionId,
+    updateSessionInPlace,
     newChat,
   }
 })

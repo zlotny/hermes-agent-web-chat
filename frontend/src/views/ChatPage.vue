@@ -246,6 +246,7 @@ export default {
       _bannerEligible: false,
       _bannerTimer: null,
       _activityTimer: null,
+      _scrollRafPending: false,
     };
   },
   created() {
@@ -305,8 +306,14 @@ export default {
     },
   },
   updated() {
-    if (this.atBottom) {
-      this.$nextTick(() => this.scrollToBottom());
+    // Throttle scroll sync to once per frame — prevents layout thrashing
+    // during rapid re-renders (e.g. stream completion, session list update).
+    if (this.atBottom && !this._scrollRafPending) {
+      this._scrollRafPending = true;
+      requestAnimationFrame(() => {
+        this._scrollRafPending = false;
+        this.scrollToBottom();
+      });
     }
   },
   methods: {
@@ -384,19 +391,13 @@ export default {
             currentId === newSessionId;
 
           // On early session_id event (done=false), switch from temp to real ID
+          // using in-place splice to avoid re-rendering the entire sidebar.
           if (newSessionId && sendingSessionId !== newSessionId) {
-            // Migrate the placeholder to the real ID in the sidebar
-            const idx = this.sessionsStore.allSessions.findIndex(s => s.id === sendingSessionId);
-            if (idx !== -1) {
-              this.sessionsStore.allSessions[idx] = {
-                ...this.sessionsStore.allSessions[idx],
-                id: newSessionId,
-              };
-            }
+            this.sessionsStore.replaceSessionId(sendingSessionId, newSessionId);
             this.sessionsStore.currentSessionId = newSessionId;
             if (!done) {
-              // Refresh from API to get the real entry with proper ordering
-              this.sessionsStore.loadSessions();
+              // Targeted single-session refresh, not a full list reload
+              this.sessionsStore.updateSessionInPlace(newSessionId);
             }
           }
 
@@ -423,7 +424,7 @@ export default {
                 this.loadSessionModel(resolvedId);
               }
               this.sessionsStore.currentSessionId = resolvedId;
-              this.sessionsStore.loadSessions();
+              this.sessionsStore.updateSessionInPlace(resolvedId);
             }
           } else if (done) {
             // User navigated away, but the stream finished — save the
@@ -443,12 +444,13 @@ export default {
                 [realId]: cached,
               };
             }
-            // Refresh sidebar so it shows the updated preview
-            this.sessionsStore.loadSessions();
+            // Refresh sidebar with targeted update instead of full reload
+            const navRealId = newSessionId || sendingSessionId;
+            this.sessionsStore.updateSessionInPlace(navRealId);
           } else if (!done && newSessionId) {
-            // User navigated away during streaming — still refresh the sidebar
-            // so the new session appears in the list.
-            this.sessionsStore.loadSessions();
+            // User navigated away, but a real Hermes session was created
+            // — just migrate the temp ID in-place, no full list reload.
+            this.sessionsStore.replaceSessionId(sendingSessionId, newSessionId);
           }
           this.$nextTick(() => this.scrollToBottom());
         },

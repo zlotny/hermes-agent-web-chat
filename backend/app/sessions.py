@@ -112,8 +112,26 @@ async def get_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     messages = db.get_messages(session_id)
     messages = [tag_message_source(m) for m in messages]
+    # Build title for sidebar display.
+    # db.get_session() doesn't include preview — only list_sessions_rich does.
+    # So compute title from the first user message content.
+    raw_title = (session.get("title") or "").strip()
+    raw_id = session.get("id", "")
+    # If title is still the raw Hermes auto-generated ID, derive from messages
+    if not raw_title or raw_title == raw_id:
+        first_user = next(
+            (m["content"][:60] for m in messages
+             if m.get("role") == "user" and m.get("content")),
+            None
+        )
+        title = first_user or raw_id
+    else:
+        title = raw_title[:60] + ("..." if len(raw_title) > 60 else "")
     return {
         "id": session.get("id"),
         "model": session.get("model"),
+        "title": title,
+        "message_count": session.get("message_count") or len(messages),
+        "last_updated": ts_to_iso(session.get("last_active")),
         "messages": messages,
     }
