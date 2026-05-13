@@ -15,7 +15,7 @@ Environment=HERMES_SRC=/home/ndrs/.hermes/hermes-agent
 Environment=PORT=11300
 
 # Load sensitive environment variables from a file excluded from git:
-# EnvironmentFile=/etc/hermes-agent-web-chat.env
+EnvironmentFile=/etc/hermes-agent-web-chat.env
 
 ExecStart=/home/ndrs/.hermes/hermes-agent/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 11300
 

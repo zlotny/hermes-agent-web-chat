@@ -114,6 +114,8 @@ uvicorn main:app --host 0.0.0.0 --port 11300
 
 Open **http://localhost:11300** and log in. The FastAPI app statically serves the Vue SPA from `frontend/dist/` — no separate web server needed.
 
+> The password can also be set via a `backend/.env` file (gitignored). See `backend/.env.example` for the format.
+
 ---
 
 ### Scenario 2 — Docker with Traefik + host backend
@@ -124,11 +126,18 @@ The Vue SPA runs in Docker, but the Python backend runs **directly on the host**
 
 ```bash
 sudo cp deploy/hermes-agent-web-chat-backend.service /etc/systemd/system/
+
+# Create an environment file for the login password (outside the repo):
+echo 'AUTH_PASSWORD=your-secret-password' | sudo tee /etc/hermes-agent-web-chat.env
+sudo chmod 600 /etc/hermes-agent-web-chat.env
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now hermes-agent-web-chat-backend.service
 ```
 
 Backend listens on port **11300** (not exposed to the internet).
+
+> **Why not put the password in the service file?** The systemd unit is tracked by git. Using `EnvironmentFile` keeps secrets outside the repo. The service file is already configured with `EnvironmentFile=/etc/hermes-agent-web-chat.env` — just uncomment it if you copy a fresh version.
 
 #### 2 — Container (SPA + API proxy)
 
