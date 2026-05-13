@@ -2,17 +2,20 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useChatStore } from './chat'
 
+const PAGE_SIZE = 20
+
 export const useSessionsStore = defineStore('sessions', () => {
   // --- State ---
   const allSessions = ref([])
   const totalSessions = ref(0)
+  const loadedCount = ref(0)
   const loadingSessions = ref(false)
+  const loadingMore = ref(false)
   const sidebarError = ref('')
 
   const currentSessionId = ref(null)
   const allMessages = ref([])
 
-  const showAll = ref(false)
   const showCrons = ref(false)
   const showSystemMessages = ref(false)
   const searchQuery = ref('')
@@ -26,22 +29,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     )
   })
 
-  const visibleSessions = computed(() => {
-    const base = filteredSessions.value
-    return showAll.value ? base : base.slice(0, 20)
-  })
+  const hasMore = computed(() => loadedCount.value < totalSessions.value)
 
   // --- Actions ---
   async function loadSessions() {
     sidebarError.value = ''
     loadingSessions.value = true
+    loadedCount.value = 0
+    allSessions.value = []
     try {
-      const url = `/api/sessions?limit=20&show_crons=${showCrons.value}`
+      const url = `/api/sessions?limit=${PAGE_SIZE}&offset=0&show_crons=${showCrons.value}`
       const res = await fetch(url, { credentials: 'same-origin' })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       allSessions.value = data.sessions || []
       totalSessions.value = data.total || 0
+      loadedCount.value = allSessions.value.length
     } catch (e) {
       sidebarError.value = 'Failed: ' + e.message
     } finally {
@@ -49,17 +52,23 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
-  async function showAllSessions() {
-    showAll.value = true
-    if (allSessions.value.length >= totalSessions.value) return
+  async function loadMoreSessions() {
+    if (loadingMore.value || !hasMore.value || searchQuery.value.trim()) return
+    loadingMore.value = true
     try {
-      const url = `/api/sessions?show_crons=${showCrons.value}`
+      const url = `/api/sessions?limit=${PAGE_SIZE}&offset=${loadedCount.value}&show_crons=${showCrons.value}`
       const res = await fetch(url, { credentials: 'same-origin' })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
-      allSessions.value = data.sessions || []
+      if (data.sessions) {
+        allSessions.value = [...allSessions.value, ...data.sessions]
+        loadedCount.value = allSessions.value.length
+        totalSessions.value = data.total || totalSessions.value
+      }
     } catch (e) {
-      sidebarError.value = 'Failed: ' + e.message
+      sidebarError.value = 'Error loading more: ' + e.message
+    } finally {
+      loadingMore.value = false
     }
   }
 
@@ -88,27 +97,27 @@ export const useSessionsStore = defineStore('sessions', () => {
   function newChat() {
     currentSessionId.value = null
     allMessages.value = []
-    showAll.value = false
   }
 
   return {
     // state
     allSessions,
     totalSessions,
+    loadedCount,
     loadingSessions,
+    loadingMore,
     sidebarError,
     currentSessionId,
     allMessages,
-    showAll,
     showCrons,
     showSystemMessages,
     searchQuery,
     filteredSessions,
     // getters
-    visibleSessions,
+    hasMore,
     // actions
     loadSessions,
-    showAllSessions,
+    loadMoreSessions,
     loadSession,
     newChat,
   }

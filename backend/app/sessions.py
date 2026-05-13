@@ -11,20 +11,24 @@ router = APIRouter()
 
 
 @router.get("/api/sessions")
-async def list_sessions(limit: int = 0, show_crons: bool = False):
-    """List sessions via Hermes' SessionDB — same as `hermes sessions browse`."""
+async def list_sessions(limit: int = 0, offset: int = 0, show_crons: bool = False):
+    """List sessions via Hermes' SessionDB — same as `hermes sessions browse`.
+
+    Always fetches a large batch from the DB to compute the true total,
+    then returns the requested slice. Supports offset-based pagination.
+    """
     db = get_db()
-    effective_limit = limit if limit > 0 else 9999
     loop = asyncio.get_event_loop()
 
-    # Use SessionDB.list_sessions_rich() via run_in_executor to avoid the
-    # known async bug where db._lock causes 0-row returns in async handlers.
+    # Always fetch a generous batch so we can compute the true total
+    # after Python-side filtering (cron exclusion, etc.)
+    BATCH_SIZE = 9999
     exclude = None if show_crons else ["cron"]
     rows = await loop.run_in_executor(
         None,
         lambda: db.list_sessions_rich(
             exclude_sources=exclude,
-            limit=effective_limit,
+            limit=BATCH_SIZE,
             offset=0,
             order_by_last_active=True,
         ),
@@ -55,9 +59,11 @@ async def list_sessions(limit: int = 0, show_crons: bool = False):
             }
         )
     total = len(sessions)
-    if limit > 0:
-        sessions = sessions[:limit]
-    return {"sessions": sessions, "total": total}
+    # Apply offset and limit for the response page
+    start = offset
+    end = offset + limit if limit > 0 else total
+    page = sessions[start:end]
+    return {"sessions": page, "total": total}
 
 
 @router.get("/api/debug/db")

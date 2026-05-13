@@ -38,7 +38,11 @@
       </div>
 
       <!-- Session list -->
-      <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
+      <div
+        ref="sessionListRef"
+        class="flex-1 overflow-y-auto p-2 space-y-0.5"
+        @scroll="onSessionListScroll"
+      >
         <div v-if="sessionsStore.loadingSessions" class="space-y-3 px-2 pt-2">
           <div v-for="n in 8" :key="n" class="space-y-1.5">
             <div class="skel h-3 w-[85%]"></div>
@@ -53,20 +57,30 @@
         </div>
         <template v-else-if="sessionsStore.filteredSessions.length > 0">
           <SessionItem
-            v-for="s in sessionsStore.visibleSessions"
+            v-for="s in sessionsStore.filteredSessions"
             :key="s.id"
             :session="s"
             :is-active="s.id === sessionsStore.currentSessionId"
             :agent-active="chatStore.isSessionActive(s.id)"
             @select="loadSession(s.id)"
           />
-          <button
-            v-if="!sessionsStore.showAll && sessionsStore.totalSessions > sessionsStore.visibleSessions.length"
-            @click="sessionsStore.showAllSessions()"
-            class="w-full py-2 mt-1 text-xs text-muted border border-border rounded-md bg-transparent hover:border-accent hover:text-accent transition-colors"
+          <!-- Loading indicator for scroll-triggered loads -->
+          <div
+            v-if="sessionsStore.loadingMore"
+            class="flex items-center justify-center py-3 text-muted text-xs"
           >
-            Show all ({{ sessionsStore.totalSessions }})
-          </button>
+            <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Loading more…
+          </div>
+          <div
+            v-else-if="!sessionsStore.hasMore && sessionsStore.filteredSessions.length > 0"
+            class="text-center py-3 text-muted/40 text-[10px]"
+          >
+            All {{ sessionsStore.totalSessions }} sessions loaded
+          </div>
         </template>
         <div v-else class="text-muted/50 text-xs text-center py-6">
           No sessions match "{{ sessionsStore.searchQuery }}"
@@ -109,11 +123,14 @@ export default {
     return { sessionsStore: useSessionsStore(), chatStore: useChatStore() }
   },
   watch: {
-    'sessionsStore.searchQuery'(q) {
-      // Auto-show-all when search yields no visible results — the session may be hidden
-      if (q.trim() && this.sessionsStore.filteredSessions.length === 0) {
-        this.sessionsStore.showAllSessions()
-      }
+    'sessionsStore.filteredSessions': {
+      deep: true,
+      async handler() {
+        // Initial fill: if no scrollbar and more sessions exist, load more
+        // until the sidebar is full or all sessions are loaded.
+        await this.$nextTick()
+        this.fillIfNotScrollable()
+      },
     },
   },
   methods: {
@@ -125,6 +142,33 @@ export default {
     loadSession(id) {
       this.sessionsStore.loadSession(id)
       if (!this.isDesktop) this.$emit('close')
+    },
+    onSessionListScroll() {
+      const el = this.$refs.sessionListRef
+      if (!el) return
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+      if (nearBottom && this.sessionsStore.hasMore && !this.sessionsStore.loadingMore) {
+        this.sessionsStore.loadMoreSessions()
+      }
+    },
+    async fillIfNotScrollable() {
+      // If a search is active, don't auto-load
+      if (this.sessionsStore.searchQuery.trim()) return
+      // If everything is already loaded, nothing to do
+      if (!this.sessionsStore.hasMore) return
+      // If still loading, wait
+      if (this.sessionsStore.loadingMore) return
+
+      const el = this.$refs.sessionListRef
+      if (!el) return
+
+      // If the list doesn't overflow the container, load more
+      if (el.scrollHeight <= el.clientHeight + 5) {
+        await this.sessionsStore.loadMoreSessions()
+        // Recurse until scrollbar appears or all loaded
+        await this.$nextTick()
+        this.fillIfNotScrollable()
+      }
     },
   },
 }

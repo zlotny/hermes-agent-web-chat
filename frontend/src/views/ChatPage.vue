@@ -266,7 +266,6 @@ export default {
       this._resetBannerDebounce();
     },
     "sessionsStore.showCrons"() {
-      this.sessionsStore.showAll = false;
       this.sessionsStore.loadSessions();
     },
     /** Reset banner debounce when a new stream starts for the current session. */
