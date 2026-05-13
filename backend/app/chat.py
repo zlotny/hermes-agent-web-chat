@@ -42,6 +42,31 @@ _stop_events: dict[str, asyncio.Event] = {}
 _stop_events_lock = asyncio.Lock()
 
 
+# Periodic cleanup task that removes orphaned stop events
+# (events older than 10 minutes with no active agent or session).
+async def _cleanup_orphaned_stop_events():
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            cutoff = time.time() - 600  # 10 minutes stale
+            async with _stop_events_lock:
+                stale = [sid for sid in _stop_events
+                         if sid not in _active_agents
+                         and sid not in _active_sessions]
+                for sid in stale:
+                    _stop_events.pop(sid, None)
+                if stale:
+                    logger.debug("Cleaned up %d orphaned stop events", len(stale))
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+
+
+# Start cleanup on import (the asyncio loop must be running — safe for FastAPI)
+_threading.Thread(target=lambda: asyncio.run(_cleanup_orphaned_stop_events()), daemon=True).start()
+
+
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None

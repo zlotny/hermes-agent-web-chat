@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Environment
+backend/.env
+backend/.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+AGENTS.md
+
+# Build artifacts
+dist/
+frontend/dist/
+
+# Assets & docs (not needed at runtime)
+assets/
+screenshots/
+README.md
+LICENSE
+deploy/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

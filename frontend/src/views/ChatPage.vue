@@ -98,7 +98,7 @@
         <!-- Reconnecting banner (shown on reload while agent is active) -->
         <div
           v-if="showReconnectingBanner"
-          class="sticky top-0 z-10 mx-4 mt-2 px-4 py-2 rounded-lg bg-orange-900/30 border border-orange-700/50 text-orange-300 text-xs flex items-center gap-2"
+          class="sticky top-0 z-10 mx-4 mt-4 px-4 py-3 rounded-lg bg-orange-900/30 border border-orange-700/50 text-orange-300 text-xs flex items-center gap-2"
         >
           <svg
             class="animate-spin h-3.5 w-3.5 flex-shrink-0"
@@ -144,7 +144,8 @@
           v-if="
             !sessionsStore.allMessages.length &&
             !currentStream.streamingMsg &&
-            !currentStream.status
+            !currentStream.status &&
+            !sessionsStore.loadingMessageId
           "
           @send="handleSendFromEmptyState"
           @select-model="onModelSelect"
@@ -257,7 +258,7 @@ export default {
     this.authStore.checkAuth().then((ok) => {
       if (ok) {
         this.sessionsStore.loadSessions();
-        this.chatStore.fetchProviders().then(() => this.loadDefaultModel());
+        this.chatStore.fetchProviders();
         this.chatStore.fetchDefaultModel().then(() => this.loadDefaultModel());
         this.chatStore.fetchCommands();
         // Start polling active sessions for reload resilience
@@ -274,6 +275,10 @@ export default {
   },
   watch: {
     "sessionsStore.currentSessionId"(newId, oldId) {
+      // Save messages for the session we're leaving
+      if (oldId) {
+        this.sessionsStore.saveMessageCache(oldId)
+      }
       // If there is no session anymore, reset model to default
       if (!newId) {
         this.loadDefaultModel();
@@ -351,11 +356,19 @@ export default {
       this.chatStore.inputText = "";
       this.$nextTick(() => this.scrollToBottom());
 
+      // For new chats, immediately inject a placeholder into the sidebar
+      // so "New session…" appears before the backend round-trip.
+      if (!sid) {
+        const tempId = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        this.sessionsStore.addPlaceholderSession(tempId);
+        this.sessionsStore.currentSessionId = tempId;
+      }
+
       // Capture the session we were sending to at the time the message was
       // submitted. If the user navigates away during streaming, the backend
       // still persists messages via SessionDB — they'll see results when they
       // come back to this session.
-      const sendingSessionId = sid;
+      const sendingSessionId = sid || this.sessionsStore.currentSessionId;
 
       await this.chatStore.sendMessage({
         message: text,
@@ -370,19 +383,30 @@ export default {
             currentId === sendingSessionId ||
             currentId === newSessionId;
 
-          // On early session_id event (done=false), update the sidebar
-          // immediately so the session appears mid-stream.
-          if (newSessionId && !currentId) {
+          // On early session_id event (done=false), switch from temp to real ID
+          if (newSessionId && sendingSessionId !== newSessionId) {
+            // Migrate the placeholder to the real ID in the sidebar
+            const idx = this.sessionsStore.allSessions.findIndex(s => s.id === sendingSessionId);
+            if (idx !== -1) {
+              this.sessionsStore.allSessions[idx] = {
+                ...this.sessionsStore.allSessions[idx],
+                id: newSessionId,
+              };
+            }
             this.sessionsStore.currentSessionId = newSessionId;
             if (!done) {
+              // Refresh from API to get the real entry with proper ordering
               this.sessionsStore.loadSessions();
             }
           }
 
+          // Use resolvedId (real Hermes ID) to look up stream state,
+          // since the stream was migrated from the temp key.
+          const st = this.chatStore.getStreamState(resolvedId);
+
           if (stillOnSameSession) {
             if (done) {
               // Commit the assistant message from the per-session state
-              const st = this.chatStore.getStreamState(sendingSessionId);
               if (st.streamingMsg) {
                 this.sessionsStore.allMessages.push({
                   role: "assistant",
@@ -401,6 +425,26 @@ export default {
               this.sessionsStore.currentSessionId = resolvedId;
               this.sessionsStore.loadSessions();
             }
+          } else if (done) {
+            // User navigated away, but the stream finished — save the
+            // assistant response to the message cache so it's visible
+            // when they return to this session.
+            if (st.streamingMsg) {
+              const realId = newSessionId || sendingSessionId;
+              const cached = this.sessionsStore.messageCache[realId] || [];
+              cached.push({
+                role: "assistant",
+                content: st.streamingMsg,
+                source: "assistant",
+                tool_calls: st.toolCalls?.length ? st.toolCalls : undefined,
+              });
+              this.sessionsStore.messageCache = {
+                ...this.sessionsStore.messageCache,
+                [realId]: cached,
+              };
+            }
+            // Refresh sidebar so it shows the updated preview
+            this.sessionsStore.loadSessions();
           } else if (!done && newSessionId) {
             // User navigated away during streaming — still refresh the sidebar
             // so the new session appears in the list.

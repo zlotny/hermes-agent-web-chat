@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed } from 'vue'
+import { isSystemMsg, toolArgPreview, prettyJson, renderContent, shortModel } from '../utils/helpers'
 
 export const useChatStore = defineStore('chat', () => {
   // --- Model selector state (global, not per-session) ---
@@ -38,6 +39,7 @@ export const useChatStore = defineStore('chat', () => {
       sending: false,
       _abortController: null,
       toolCalls: [],
+      messages: [],      // cached messages for this session (survives navigation)
     })
   }
 
@@ -51,6 +53,7 @@ export const useChatStore = defineStore('chat', () => {
     loadError: '',
     sending: false,
     toolCalls: [],
+    messages: [],
   })
 
   /**
@@ -113,61 +116,11 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Pure helpers
+  // Pure helpers (delegated to utils/helpers.js)
   // ---------------------------------------------------------------------------
 
-  function isSystemMsg(m) {
-    if (!m || !m.content) return false
-    if (m.source === 'system') return true
-    if (m.source === 'user') return false
-    const c = m.content.trim()
-    return (
-      c.startsWith('[IMPORTANT:') ||
-      c.startsWith('Review the conversation above') ||
-      c.startsWith('Review the conversation above and consider') ||
-      c.startsWith('System:') ||
-      c === '[SILENT]'
-    )
-  }
-
-  function toolArgPreview(tc) {
-    try {
-      const args = JSON.parse(tc.function?.arguments || '{}')
-      const val = Object.values(args).find(
-        (v) => typeof v === 'string' && v.length < 40
-      )
-      return val || ''
-    } catch {
-      return ''
-    }
-  }
-
-  function prettyJson(str) {
-    try {
-      return JSON.stringify(JSON.parse(str), null, 2)
-    } catch {
-      return str || ''
-    }
-  }
-
-  function renderContent(t) {
-    if (!t) return ''
-    let h = t.replace(
-      /```(\w*)\n([\s\S]*?)```/g,
-      '<pre><code>$2</code></pre>'
-    )
-    h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
-    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    h = h.replace(/\n\n/g, '</p><p>')
-    h = h.replace(/\n/g, '<br>')
-    return '<p>' + h + '</p>'
-  }
-
-  function shortModel(m) {
-    return m ? m.split('/').pop() || m : ''
-  }
   function shortModelName(m) {
-    return m ? m.split('/').pop() || m : ''
+    return shortModel(m)
   }
 
   function providerName(slug) {

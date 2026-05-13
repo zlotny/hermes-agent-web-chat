@@ -49,6 +49,8 @@
 </template>
 
 <script>
+import { shortModel, formatMsgTime } from '../utils/helpers'
+
 export default {
   props: {
     session: { type: Object, required: true },
@@ -69,22 +71,10 @@ export default {
   },
   methods: {
     shortModel(m) {
-      const name = m ? (m.split('/').pop() || m) : ''
-      // Middle ellipsis: show first ~10 chars and last ~6 if name is long
-      if (name.length > 20) {
-        return name.slice(0, 10) + '…' + name.slice(-6)
-      }
-      return name
+      return shortModel(m)
     },
     formatDate(iso) {
-      if (!iso) return ''
-      const d = new Date(iso)
-      return d.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      return formatMsgTime(iso)
     },
   },
 }

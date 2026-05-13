@@ -42,6 +42,7 @@
 
 <script>
 import ToolChain from './ToolChain.vue'
+import { renderContent } from '../utils/helpers'
 
 export default {
   components: { ToolChain },
@@ -57,14 +58,7 @@ export default {
       return !!(this.text || this.status === 'sending' || this.status === 'thinking' || this.toolText || this.toolCalls.length)
     },
     renderedText() {
-      const t = this.text || ''
-      if (!t) return ''
-      let h = t.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
-      h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      h = h.replace(/\n\n/g, '</p><p>')
-      h = h.replace(/\n/g, '<br>')
-      return '<p>' + h + '</p>'
+      return renderContent(this.text)
     },
   },
 }

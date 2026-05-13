@@ -16,6 +16,10 @@ export const useSessionsStore = defineStore('sessions', () => {
   const currentSessionId = ref(null)
   const allMessages = ref([])
 
+  // Per-session message cache: survives navigation away and back while
+  // the stream is still running (API hasn't persisted full messages yet).
+  const messageCache = ref({})
+
   const showCrons = ref(false)
   const showSystemMessages = ref(false)
   const searchQuery = ref('')
@@ -72,10 +76,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  const loadingMessageId = ref(null)
+
   async function loadSession(id) {
     currentSessionId.value = id
-    allMessages.value = []
+    loadingMessageId.value = id
     sidebarError.value = ''
+
+    // Don't clear messages immediately — prevents EmptyState flash.
+    // If we have cached messages (from a stream in progress), restore them.
+    const chatStore = useChatStore()
+    if (id && messageCache.value[id]) {
+      allMessages.value = [...messageCache.value[id]]
+      loadingMessageId.value = null
+      return
+    }
+
     try {
       const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
         credentials: 'same-origin',
@@ -83,15 +99,61 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       allMessages.value = data.messages || []
-      // Update the chat store's current model from the session
-      const chatStore = useChatStore()
+
+      // Merge in cached messages if the session has extra messages
+      // from a stream that hasn't fully persisted yet
+      if (messageCache.value[id]) {
+        const cached = messageCache.value[id]
+        for (const cm of cached) {
+          if (cm.role === 'assistant' && cm.content) {
+            const exists = allMessages.value.some(m => m.content === cm.content)
+            if (!exists) allMessages.value.push(cm)
+          }
+        }
+      }
+
       if (data.model) {
         chatStore.setCurrentModel(data.model)
       }
     } catch (e) {
       sidebarError.value = 'Error: ' + e.message
       allMessages.value = []
+    } finally {
+      loadingMessageId.value = null
     }
+  }
+
+  function saveMessageCache(sessionId) {
+    if (sessionId && allMessages.value.length) {
+      messageCache.value = { ...messageCache.value, [sessionId]: [...allMessages.value] }
+    }
+  }
+
+  function clearMessageCache(sessionId) {
+    if (sessionId) {
+      const next = { ...messageCache.value }
+      delete next[sessionId]
+      messageCache.value = next
+    }
+  }
+
+  function addPlaceholderSession(tempId) {
+    // Inject a fake session into the sidebar immediately so "New session…"
+    // appears before the backend round-trip.
+    const exists = allSessions.value.some(s => s.id === tempId)
+    if (exists) return
+    allSessions.value = [
+      {
+        id: tempId,
+        title: '',
+        model: '',
+        message_count: 0,
+        last_updated: '',
+        started_at: '',
+        is_cron: false,
+      },
+      ...allSessions.value,
+    ]
   }
 
   function newChat() {
@@ -109,6 +171,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     sidebarError,
     currentSessionId,
     allMessages,
+    messageCache,
+    loadingMessageId,
     showCrons,
     showSystemMessages,
     searchQuery,
@@ -119,6 +183,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     loadSessions,
     loadMoreSessions,
     loadSession,
+    saveMessageCache,
+    clearMessageCache,
+    addPlaceholderSession,
     newChat,
   }
 })

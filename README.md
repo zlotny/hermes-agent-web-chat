@@ -1,8 +1,22 @@
 # Hermes Agent Web Chat
 
+<p align="center">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
+  <img alt="Node" src="https://img.shields.io/badge/node-22-green">
+</p>
+
 A web chat interface for [Hermes Agent](https://github.com/NousResearch/hermes-agent). A **drop-in replacement for the TUI** (`hermes chat`) — same agent, same session database, same tools — but accessible from a web browser.
 
 No terminal quirks. No overengineering. No weird over-scoping. Just a clean chat UI that works on desktop and mobile.
+
+## What this is NOT
+
+- ❌ **Not a multi-user platform** — single-shared-password auth, no user isolation
+- ❌ **Not a rewrite of Hermes** — uses the exact same AIAgent/SessionDB classes
+- ❌ **Not an OpenAPI proxy** — no wrapper layer that strips functionality
+- ❌ **Not a SaaS** — runs on your machine, no telemetry, no cloud dependency
+- ✅ **Just a damn chat** — the TUI, in a browser, nothing more
 
 <p align="center">
   <a href="assets/main-scr-13-05-26.png" target="_blank">
@@ -34,6 +48,39 @@ The Python backend uses the **exact same Hermes Agent classes** (`AIAgent`, `Ses
 4. Sessions are stored in the **same SQLite database** (`~/.hermes/state.db`) — CLI and web sessions coexist seamlessly. You can start something in the web UI and resume it in the terminal, or vice versa
 
 No Hermes ports exposed. No config changes needed. The only difference is the UI.
+
+### Architecture
+
+```mermaid
+flowchart LR
+    Browser["Browser (Vue SPA)"]
+    Nginx["Docker: nginx/aiohttp proxy<br/>(serves SPA, forwards /api/*)"]
+    Backend["Host: FastAPI (port 11300)"]
+    Agent["Host: AIAgent<br/>(same process)"]
+    DB["~/.hermes/state.db<br/>(SQLite)"]
+
+    Browser -- "https" --> Nginx
+    Nginx -- "/api/*" --> Backend
+    Backend -- "SSE stream" --> Nginx
+    Backend --> Agent
+    Agent --> DB
+    Agent -- "filesystem, terminal, tools" --> Host
+
+    subgraph Host["Host Machine"]
+        Backend
+        Agent
+        DB
+    end
+
+    style Nginx fill:#2962ff,color:#fff
+    style Backend fill:#00c853,color:#fff
+    style Agent fill:#aa00ff,color:#fff
+```
+
+Two deployment modes:
+
+- **Bare-metal**: FastAPI serves both the API and the SPA directly — no Docker needed.
+- **Docker + Traefik**: The Vue SPA runs in a lightweight container that proxies `/api/*` to the host backend. The agent itself always runs on the host so its tools (terminal, filesystem) see your real machine.
 
 ## Quick start
 
@@ -134,3 +181,4 @@ No Docker needed during development. Changes to Python files auto-reload the bac
 | `HERMES_HOME` | `~/.hermes` | Hermes Agent data directory |
 | `HERMES_SRC` | `$HERMES_HOME/hermes-agent` | Hermes Agent source path |
 | `PORT` | `11300` | HTTP listen port |
+| `DEBUG` | `false` | Enable debug endpoints (`/api/debug/*`) |

@@ -10,8 +10,12 @@ WorkingDirectory=/home/ndrs/hermes-agent-web-chat/backend
 
 Environment=HERMES_HOME=/home/ndrs/.hermes
 Environment=HERMES_SRC=/home/ndrs/.hermes/hermes-agent
-Environment=AUTH_PASSWORD=lWDe0pYPJAvzGrGi
+# Set AUTH_PASSWORD via EnvironmentFile to keep it out of the repo:
+#   Environment=AUTH_PASSWORD=your-secret-password
 Environment=PORT=11300
+
+# Load sensitive environment variables from a file excluded from git:
+# EnvironmentFile=/etc/hermes-agent-web-chat.env
 
 ExecStart=/home/ndrs/.hermes/hermes-agent/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 11300
 

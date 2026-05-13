@@ -66,6 +66,7 @@
 
 <script>
 import ToolChain from './ToolChain.vue'
+import { isSystemMsg, renderContent, formatMsgTime } from '../utils/helpers'
 
 export default {
   components: { ToolChain },
@@ -74,40 +75,15 @@ export default {
   },
   computed: {
     isSystemMsg() {
-      if (!this.message || !this.message.content) return false
-      if (this.message.source === 'system') return true
-      if (this.message.source === 'user') return false
-      const c = this.message.content.trim()
-      return (
-        c.startsWith('[IMPORTANT:') ||
-        c.startsWith('Review the conversation above') ||
-        c.startsWith('Review the conversation above and consider') ||
-        c.startsWith('System:') ||
-        c === '[SILENT]'
-      )
+      return isSystemMsg(this.message)
     },
     renderedContent() {
-      const t = this.message.content || ''
-      if (!t) return ''
-      let h = t.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
-      h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      h = h.replace(/\n\n/g, '</p><p>')
-      h = h.replace(/\n/g, '<br>')
-      return '<p>' + h + '</p>'
+      return renderContent(this.message.content)
     },
   },
   methods: {
     formatMsgTime(ts) {
-      if (!ts) return ''
-      const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts)
-      if (isNaN(d.getTime())) return ''
-      return d.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      return formatMsgTime(ts)
     },
     async copyContent() {
       try {

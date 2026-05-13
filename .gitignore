@@ -6,3 +6,8 @@ dist/
 node_modules/
 .plan.md
 AGENTS.md
+
+# Environment files
+backend/.env
+backend/.env.*
+!.env.example

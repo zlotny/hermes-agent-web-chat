@@ -38,13 +38,15 @@ async def api_login(request: Request):
     token = secrets.token_urlsafe(32)
     _session_tokens[token] = datetime.utcnow() + TOKEN_EXPIRY
     resp = JSONResponse(content={"ok": True})
+    # Set secure=True when behind HTTPS (Traefik sets this header)
+    is_secure = request.headers.get("X-Forwarded-Proto", "http") == "https"
     resp.set_cookie(
         key="session",
         value=token,
         max_age=int(TOKEN_EXPIRY.total_seconds()),
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=is_secure,
     )
     return resp
 

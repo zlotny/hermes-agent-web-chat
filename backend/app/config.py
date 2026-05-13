@@ -24,11 +24,20 @@ HERMES_SRC = os.path.expanduser(
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
-AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "lWDe0pYPJAvzGrGi")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "changeme")
 PASSWORD_HASH = hashlib.sha256(AUTH_PASSWORD.encode()).hexdigest()
 TOKEN_EXPIRY = timedelta(hours=24)
 
 # ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
+
+# ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
-PORT = int(os.getenv("PORT", "11300"))
+_PORT_ENV = os.getenv("PORT", "11300")
+try:
+    PORT = int(_PORT_ENV)
+except (ValueError, TypeError):
+    PORT = 11300

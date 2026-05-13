@@ -105,6 +105,7 @@
 <script>
 import ModelSelector from "./ModelSelector.vue";
 import CommandSelector from "./CommandSelector.vue";
+import { looksLikeFilePath } from "../utils/helpers";
 
 export default {
   components: { ModelSelector, CommandSelector },
@@ -210,10 +211,7 @@ export default {
 
     /** Check if text looks like a file path rather than a slash command */
     _looksLikeFilePath(text) {
-      if (!text || !text.startsWith('/')) return false
-      const firstWord = text.split(/\s+/)[0] || ''
-      // File paths have additional / chars in the first word (e.g. /Users/foo)
-      return firstWord.includes('/', 1)
+      return looksLikeFilePath(text)
     },
 
     // ── Command selector actions ─────────────────────────────────────

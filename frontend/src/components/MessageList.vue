@@ -35,6 +35,7 @@
 import MessageBubble from './MessageBubble.vue'
 import ToolChain from './ToolChain.vue'
 import StreamingMessage from './StreamingMessage.vue'
+import { isSystemMsg, formatMsgTime } from '../utils/helpers'
 
 export default {
   components: { MessageBubble, ToolChain, StreamingMessage },
@@ -55,7 +56,7 @@ export default {
         if (m.role !== 'user' && m.role !== 'assistant') return false
         // Use source field when available, fall back to content patterns
         if (m.source === 'system' && !this.showSystemMessages) return false
-        if (!m.source && this._isSystemMsg(m) && !this.showSystemMessages) return false
+        if (!m.source && isSystemMsg(m) && !this.showSystemMessages) return false
         return true
       })
 
@@ -83,30 +84,7 @@ export default {
       if (!msgs || !msgs.length) return ''
       const last = msgs[msgs.length - 1]
       const ts = last.timestamp || last.created_at
-      if (!ts) return ''
-      const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts)
-      if (isNaN(d.getTime())) return ''
-      return d.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    },
-  },
-  methods: {
-    _isSystemMsg(m) {
-      if (!m || !m.content) return false
-      if (m.source === 'system') return true
-      if (m.source === 'user') return false
-      const c = m.content.trim()
-      return (
-        c.startsWith('[IMPORTANT:') ||
-        c.startsWith('Review the conversation above') ||
-        c.startsWith('Review the conversation above and consider') ||
-        c.startsWith('System:') ||
-        c === '[SILENT]'
-      )
+      return formatMsgTime(ts)
     },
   },
 }

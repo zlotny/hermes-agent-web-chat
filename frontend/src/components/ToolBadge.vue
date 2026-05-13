@@ -19,6 +19,8 @@
 </template>
 
 <script>
+import { toolArgPreview, prettyJson } from '../utils/helpers'
+
 export default {
   props: {
     toolCall: { type: Object, required: true },
@@ -31,22 +33,10 @@ export default {
       return this.toolCall.function?.arguments || ''
     },
     argPreview() {
-      try {
-        const args = JSON.parse(this.argsStr || '{}')
-        const val = Object.values(args).find(
-          (v) => typeof v === 'string' && v.length < 40
-        )
-        return val || ''
-      } catch {
-        return ''
-      }
+      return toolArgPreview(this.toolCall)
     },
     prettyArgs() {
-      try {
-        return JSON.stringify(JSON.parse(this.argsStr), null, 2)
-      } catch {
-        return this.argsStr || ''
-      }
+      return prettyJson(this.argsStr)
     },
   },
 }

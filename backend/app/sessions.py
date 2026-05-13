@@ -66,9 +66,18 @@ async def list_sessions(limit: int = 0, offset: int = 0, show_crons: bool = Fals
     return {"sessions": page, "total": total}
 
 
+from app.config import DEBUG
+
+
 @router.get("/api/debug/db")
 async def debug_db():
-    """Debug endpoint to check SessionDB state using public API."""
+    """Debug endpoint to check SessionDB state using public API.
+
+    Only available when DEBUG=1 is set.
+    """
+    if not DEBUG:
+        raise HTTPException(status_code=404, detail="Not found")
+
     db = get_db()
     loop = asyncio.get_event_loop()
 
