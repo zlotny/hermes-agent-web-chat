@@ -4,12 +4,24 @@ A web chat interface for [Hermes Agent](https://github.com/NousResearch/hermes-a
 
 No terminal quirks. No overengineering. No weird over-scoping. Just a clean chat UI that works on desktop and mobile.
 
+<p align="center">
+  <a href="assets/main-scr-13-05-26.png" target="_blank">
+    <img src="assets/main-scr-13-05-26.png" alt="Main chat interface" width="48%" />
+  </a>
+  <a href="assets/chat-scr-13-05-26.png" target="_blank">
+    <img src="assets/chat-scr-13-05-26.png" alt="Chat session view" width="48%" />
+  </a>
+</p>
+
+<p align="center"><em>As you can see... my agent is Spanish :)</em></p>
+
 ## Motivation
 
 I created this project for myself, really. After trying different frontends I found that they don't solve what was for me the most basic thing: Usability.
 
-- `hermes-webui`: forced workspace prompt wastes tokens, too slow & clunky, runs as a standalone hermes install with different values that I have on telegram or chat.  - hermes dashboard: no auth, just proxies the terminal, unusable theme on mobile, bad contrast...
-- Open WebUI: Uses hermes-agent OpenAPI-like api -> can't swap model
+- `hermes-webui`: forced workspace prompt wastes tokens, too slow & clunky, runs as a standalone hermes install with different values that I have on telegram or chat. 
+- `hermes dashboard`: no auth, just proxies the terminal, unusable theme on mobile, bad contrast...
+- `open-webui`: Uses hermes-agent OpenAPI-like api -> can't swap model
 - etc...
 
 ## How it works
