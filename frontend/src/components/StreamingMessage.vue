@@ -5,7 +5,12 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M12 2a10 10 0 0 1 10 10c0 5-4 8-10 8-2.5 0-4.8-.8-6.7-2.2L2 22l1.8-4.5A9.8 9.8 0 0 1 2 12 10 10 0 0 1 12 2z"/></svg>
         Hermes
         <span v-if="status === 'sending'" class="text-[10px] font-normal text-muted/50">connecting…</span>
-        <span v-if="status === 'thinking' && !text" class="text-[10px] font-normal text-muted/50">thinking</span>
+        <span v-if="status === 'thinking' && !text && !toolCalls.length" class="text-[10px] font-normal text-muted/50">thinking</span>
+      </div>
+
+      <!-- Tool calls during streaming (above text) -->
+      <div v-if="toolCalls.length" class="mb-2">
+        <ToolChain :tool-calls="toolCalls" />
       </div>
 
       <!-- Streaming text with blinking cursor -->
@@ -36,16 +41,20 @@
 </template>
 
 <script>
+import ToolChain from './ToolChain.vue'
+
 export default {
+  components: { ToolChain },
   props: {
     text: { type: String, default: '' },
     status: { type: String, default: '' },
     statusDetail: { type: String, default: '' },
     toolText: { type: String, default: '' },
+    toolCalls: { type: Array, default: () => [] },
   },
   computed: {
     visible() {
-      return !!(this.text || this.status === 'sending' || this.status === 'thinking' || this.toolText)
+      return !!(this.text || this.status === 'sending' || this.status === 'thinking' || this.toolText || this.toolCalls.length)
     },
     renderedText() {
       const t = this.text || ''

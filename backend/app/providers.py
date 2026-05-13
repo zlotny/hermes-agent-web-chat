@@ -87,14 +87,8 @@ async def update_session_model(session_id: str, body: dict):
                 content={"error": "Session not found"},
             )
 
-        # Update the model via SessionDB's write mechanism
-        def _do(conn):
-            conn.execute(
-                "UPDATE sessions SET model = ? WHERE id = ?",
-                (model, session_id),
-            )
-
-        db._execute_write(_do)
+        # Update the model via SessionDB's public API
+        db.set_session_model(session_id, model)
 
         # Return updated session
         updated = db.get_session(session_id)

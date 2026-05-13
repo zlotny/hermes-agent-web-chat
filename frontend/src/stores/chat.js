@@ -37,6 +37,7 @@ export const useChatStore = defineStore('chat', () => {
       loadError: '',
       sending: false,
       _abortController: null,
+      toolCalls: [],
     })
   }
 
@@ -49,6 +50,7 @@ export const useChatStore = defineStore('chat', () => {
     statusDetail: '',
     loadError: '',
     sending: false,
+    toolCalls: [],
   })
 
   /**
@@ -309,6 +311,26 @@ export const useChatStore = defineStore('chat', () => {
     if (sessionId) _removeStream(sessionId)
   }
 
+  // Per-session activity metadata (populated after reload while agent is active)
+  const agentActivity = ref({})  // { sessionId: { tool_name, tool_preview, token_snippet, status_detail } }
+
+  async function fetchAgentActivity(sessionId) {
+    if (!sessionId) return null
+    try {
+      const res = await fetch(`/api/chat/active/${encodeURIComponent(sessionId)}/status`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      if (data && data.session_id) {
+        agentActivity.value = { ...agentActivity.value, [sessionId]: data }
+      }
+      return data
+    } catch {
+      return null
+    }
+  }
+
   let _tempSidCounter = 0
 
   async function sendMessage({ message, sessionId, onSessionUpdate }) {
@@ -338,6 +360,7 @@ export const useChatStore = defineStore('chat', () => {
     state.streamingTool = ''
     state.status = 'sending'
     state.statusDetail = ''
+    state.toolCalls = []
     state.sending = true
 
     // Create AbortController for this stream
@@ -381,6 +404,7 @@ export const useChatStore = defineStore('chat', () => {
       state.streamingTool = ''
       state.status = ''
       state.statusDetail = ''
+      state.toolCalls = []
       // Mark session as locally-completed so reconnecting banner doesn't
       // fire immediately (backend still shows it active for ~300s).
       const resolvedKey = currentStreamingId.value || sessionId
@@ -429,6 +453,20 @@ export const useChatStore = defineStore('chat', () => {
           try {
             const d = JSON.parse(line.slice(6))
 
+            // Early session_id event: fires as soon as the backend
+            // creates the AIAgent and has the real Hermes session ID.
+            // Lets the sidebar refresh immediately.
+            if (d.session_id && d.session_id !== lastSessionId) {
+              const realId = d.session_id
+              lastSessionId = realId
+              migrateStream(sessionId, realId)
+              currentStreamingId.value = realId
+              // Notify caller so sidebar can refresh
+              if (onSessionUpdate) {
+                onSessionUpdate(realId, message, false)
+              }
+            }
+
             if (d.token) {
               if (!tokenReceived) {
                 tokenReceived = true
@@ -457,6 +495,17 @@ export const useChatStore = defineStore('chat', () => {
               state.status = 'thinking'
               state.streamingTool = d.tool_complete + ' ready'
               state.statusDetail = ''
+              // Build a proper tool_call object for the badge chain
+              const argsStr = d.tool_args
+                ? (typeof d.tool_args === 'string' ? d.tool_args : JSON.stringify(d.tool_args))
+                : ''
+              state.toolCalls.push({
+                id: 'tc_' + Date.now() + '_' + state.toolCalls.length,
+                function: {
+                  name: d.tool_complete,
+                  arguments: argsStr,
+                },
+              })
               setTimeout(() => {
                 if (state.streamingTool === d.tool_complete + ' ready') {
                   state.streamingTool = ''
@@ -485,13 +534,14 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       // Migrate stream state from temp key to real Hermes session ID
+      // (only if not already migrated by the early session_id event)
       if (lastSessionId && lastSessionId !== sessionId) {
         migrateStream(sessionId, lastSessionId)
         currentStreamingId.value = lastSessionId
       }
 
       if (shouldReload && onSessionUpdate) {
-        onSessionUpdate(lastSessionId, message)
+        onSessionUpdate(lastSessionId, message, true)
       }
     } catch (e) {
       if (e.name === 'AbortError') {
@@ -544,6 +594,8 @@ export const useChatStore = defineStore('chat', () => {
     setCurrentModel,
     updateSessionModel,
     abortStream,
+    agentActivity,
+    fetchAgentActivity,
     fetchActiveSessions,
     isSessionActive,
     fetchCommands,

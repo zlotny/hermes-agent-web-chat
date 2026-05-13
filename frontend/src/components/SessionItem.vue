@@ -30,7 +30,8 @@
       >
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
-      {{ session.title }}
+      <span v-if="isUntitled" class="italic text-muted/60">New session…</span>
+      <span v-else>{{ session.title }}</span>
     </div>
     <div class="flex items-center justify-between text-muted text-[11px] ml-[22px] relative z-[1]">
       <!-- Default state: model + message count -->
@@ -55,6 +56,17 @@ export default {
     agentActive: { type: Boolean, default: false },
   },
   emits: ['select'],
+  computed: {
+    /** Detect sessions whose title is still a raw Hermes auto-generated ID
+     *  (YYYYMMDD_HHMMSS_XXXXXX format, 27 chars with underscores) or empty. */
+    isUntitled() {
+      const t = this.session?.title || ''
+      if (!t) return true
+      // Hermes auto-generated IDs look like 20260513_123456_abcdef
+      // They're 27 chars with underscores in positions 8 and 15
+      return /^\d{8}_\d{6}_[a-z0-9]{6}$/.test(t)
+    },
+  },
   methods: {
     shortModel(m) {
       const name = m ? (m.split('/').pop() || m) : ''

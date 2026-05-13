@@ -18,6 +18,7 @@
       :status="status"
       :status-detail="statusDetail"
       :tool-text="streamingTool"
+      :tool-calls="streamingToolCalls"
     />
 
     <!-- Error -->
@@ -41,6 +42,7 @@ export default {
     messages: { type: Array, required: true },
     streamingMsg: { type: String, default: '' },
     streamingTool: { type: String, default: '' },
+    streamingToolCalls: { type: Array, default: () => [] },
     status: { type: String, default: '' },
     statusDetail: { type: String, default: '' },
     error: { type: String, default: '' },

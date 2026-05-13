@@ -29,6 +29,14 @@ _active_agents_lock = asyncio.Lock()
 _active_sessions: dict[str, float] = {}
 _active_sessions_lock = asyncio.Lock()
 
+# Per-session activity metadata for reload resilience.
+# Keyed by real Hermes session ID. Stores the current tool/status so the
+# frontend can display live activity after a page reload.
+# Uses threading.Lock because callbacks run in a thread executor.
+import threading as _threading
+_agent_activity: dict[str, dict] = {}
+_agent_activity_lock = _threading.Lock()
+
 # Per-session stop events — set when stop is requested, checked by SSE generator
 _stop_events: dict[str, asyncio.Event] = {}
 _stop_events_lock = asyncio.Lock()
@@ -117,11 +125,7 @@ async def _run_cli_command(
                 if model_name:
                     try:
                         _db = get_db()
-                        _db._conn.execute(
-                            "UPDATE sessions SET model = ? WHERE id = ?",
-                            (model_name, sid),
-                        )
-                        _db._conn.commit()
+                        _db.set_session_model(sid, model_name)
                     except Exception:
                         pass
 
@@ -147,6 +151,33 @@ async def get_active_sessions():
         for sid in stale:
             del _active_sessions[sid]
         return {"active_sessions": list(_active_sessions.keys())}
+
+
+@router.get("/api/chat/active/{session_id}/status")
+async def get_session_active_status(session_id: str):
+    """Return the current agent activity for a session (for reload resilience).
+
+    Returns the latest tool name, preview, and token snippet being streamed.
+    """
+    with _agent_activity_lock:
+        activity = _agent_activity.get(session_id)
+        if activity is None:
+            # Check if the session is still tracked as active
+            async with _active_sessions_lock:
+                is_active = session_id in _active_sessions
+            if not is_active:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "Session not active"},
+                )
+            activity = {}
+        return {
+            "session_id": session_id,
+            "tool_name": activity.get("tool_name", ""),
+            "tool_preview": activity.get("tool_preview", ""),
+            "token_snippet": activity.get("token_snippet", ""),
+            "status_detail": activity.get("status_detail", ""),
+        }
 
 
 @router.post("/api/chat/stop/{session_id}")
@@ -184,9 +215,11 @@ async def stop_chat(session_id: str):
         except Exception:
             pass
 
-    # 3) Clear active-session tracking
+    # 3) Clear active-session tracking and activity
     async with _active_sessions_lock:
         _active_sessions.pop(session_id, None)
+    with _agent_activity_lock:
+        _agent_activity.pop(session_id, None)
 
     return {"ok": True, "session_id": session_id}
 
@@ -213,13 +246,35 @@ async def chat_stream(req: ChatRequest):
     def on_delta(delta: str) -> None:
         if delta is not None:
             q.put_nowait(("token", delta))
+            # Track latest token snippet for reload resilience
+            snippet = delta.strip()[:120]
+            if snippet:
+                with _agent_activity_lock:
+                    _real = result_holder.get("session_id", "")
+                    if _real:
+                        act = _agent_activity.setdefault(_real, {})
+                        act["token_snippet"] = snippet
 
     def on_tool_progress(kind: str, name: str, preview: str, args: dict) -> None:
         q.put_nowait(("tool_start", {"name": name, "preview": preview}))
+        with _agent_activity_lock:
+            _real = result_holder.get("session_id", "")
+            if _real:
+                act = _agent_activity.setdefault(_real, {})
+                act["tool_name"] = name
+                act["tool_preview"] = preview
+                act["status_detail"] = f"running tool: {name}"
 
     def on_tool_complete(tc_id: str, name: str, args: dict, result: str) -> None:
         preview = (result or "")[:80]
-        q.put_nowait(("tool_complete", {"name": name, "preview": preview}))
+        q.put_nowait(("tool_complete", {"name": name, "preview": preview, "args": args}))
+        with _agent_activity_lock:
+            _real = result_holder.get("session_id", "")
+            if _real:
+                act = _agent_activity.setdefault(_real, {})
+                act["tool_name"] = ""
+                act["tool_preview"] = ""
+                act["status_detail"] = ""
 
     def on_status(kind: str, message: str) -> None:
         if kind == "lifecycle":
@@ -351,8 +406,11 @@ async def chat_stream(req: ChatRequest):
                 if stream_sid and stream_sid != real_sid:
                     _active_sessions[stream_sid] = time.time()
 
-            # Save the real Hermes session ID immediately.
+            # Save the real Hermes session ID immediately and register activity tracking.
             result_holder["session_id"] = real_sid
+            if real_sid:
+                with _agent_activity_lock:
+                    _agent_activity[real_sid] = {}
 
             # Check if stop was already requested while we were setting up
             async with _stop_events_lock:
@@ -363,9 +421,8 @@ async def chat_stream(req: ChatRequest):
             result = await loop.run_in_executor(
                 None, lambda: agent.run_conversation(user_message=req.message)
             )
-            result_holder["session_id"] = (
-                result.get("session_id") or real_sid or ""
-            )
+            new_sid = result.get("session_id") or real_sid or ""
+            result_holder["session_id"] = new_sid
         except Exception as e:
             q.put_nowait(("error", str(e)))
         finally:
@@ -381,6 +438,9 @@ async def chat_stream(req: ChatRequest):
                         _active_sessions.pop(real_sid, None)
                     if stream_sid and stream_sid != real_sid:
                         _active_sessions.pop(stream_sid, None)
+                with _agent_activity_lock:
+                    if real_sid:
+                        _agent_activity.pop(real_sid, None)
             q.put_nowait(("done", None))
 
     # ------------------------------------------------------------------
@@ -388,8 +448,18 @@ async def chat_stream(req: ChatRequest):
     # ------------------------------------------------------------------
     async def generate() -> AsyncGenerator[str, None]:
         asyncio.create_task(run_agent())
+        _session_id_emitted = False
         try:
             while True:
+                # Emit the real Hermes session ID as soon as it becomes
+                # available — lets the frontend update the sidebar and
+                # map streaming state before the stream completes.
+                if not _session_id_emitted:
+                    real_sid = result_holder.get("session_id", "")
+                    if real_sid and real_sid != stream_sid:
+                        _session_id_emitted = True
+                        yield f"data: {json.dumps({'session_id': real_sid})}\n\n"
+
                 async with _stop_events_lock:
                     current_stop = _stop_events.get(stream_sid)
                     if current_stop and current_stop.is_set():
@@ -409,7 +479,7 @@ async def chat_stream(req: ChatRequest):
                 elif kind == "tool_start":
                     yield f"data: {json.dumps({'tool_start': payload['name'], 'tool_preview': payload['preview']})}\n\n"
                 elif kind == "tool_complete":
-                    yield f"data: {json.dumps({'tool_complete': payload['name'], 'tool_result': payload['preview']})}\n\n"
+                    yield f"data: {json.dumps({'tool_complete': payload['name'], 'tool_result': payload['preview'], 'tool_args': payload['args']})}\n\n"
                 elif kind == "status":
                     yield f"data: {json.dumps({'status': payload['message']})}\n\n"
                 elif kind == "error":
@@ -425,5 +495,9 @@ async def chat_stream(req: ChatRequest):
                 _stop_events.pop(stream_sid, None)
             async with _active_sessions_lock:
                 _active_sessions.pop(stream_sid, None)
+            with _agent_activity_lock:
+                real_sid = result_holder.get("session_id", "")
+                if real_sid:
+                    _agent_activity.pop(real_sid, None)
 
     return StreamingResponse(generate(), media_type="text/event-stream")

@@ -120,7 +120,22 @@
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <span>Reconnecting — agent is still generating a response…</span>
+          <span class="flex-1">
+            <template v-if="reconnectingActivity.tool_name">
+              Running tool: <strong>{{ reconnectingActivity.tool_name }}</strong>
+              <span v-if="reconnectingActivity.tool_preview" class="text-orange-300/70"> — {{ reconnectingActivity.tool_preview }}</span>
+            </template>
+            <template v-else-if="reconnectingActivity.token_snippet">
+              Generating response…
+              <span class="text-orange-300/70 italic">{{ reconnectingActivity.token_snippet.slice(0, 60) }}</span>
+            </template>
+            <template v-else-if="reconnectingActivity.status_detail">
+              {{ reconnectingActivity.status_detail }}
+            </template>
+            <template v-else>
+              Reconnecting — agent is still generating a response…
+            </template>
+          </span>
         </div>
 
         <!-- Empty state -->
@@ -141,6 +156,7 @@
           :messages="sessionsStore.allMessages"
           :streaming-msg="currentStream.streamingMsg"
           :streaming-tool="currentStream.streamingTool"
+          :streaming-tool-calls="currentStream.toolCalls"
           :status="currentStream.status"
           :status-detail="currentStream.statusDetail"
           :error="currentStream.loadError"
@@ -228,6 +244,7 @@ export default {
       atBottom: true,
       _bannerEligible: false,
       _bannerTimer: null,
+      _activityTimer: null,
     };
   },
   created() {
@@ -253,6 +270,7 @@ export default {
   beforeUnmount() {
     window.removeEventListener("resize", this.onResize);
     this.stopActiveSessionPolling();
+    this.stopActivityPolling();
   },
   watch: {
     "sessionsStore.currentSessionId"(newId, oldId) {
@@ -271,6 +289,14 @@ export default {
     /** Reset banner debounce when a new stream starts for the current session. */
     "currentStream.sending"(v) {
       if (v) this._resetBannerDebounce();
+    },
+    /** Sync activity polling with banner visibility. */
+    showReconnectingBanner(v) {
+      if (v) {
+        this.startActivityPolling();
+      } else {
+        this.stopActivityPolling();
+      }
     },
   },
   updated() {
@@ -334,7 +360,7 @@ export default {
       await this.chatStore.sendMessage({
         message: text,
         sessionId: sendingSessionId,
-        onSessionUpdate: (newSessionId, sentMessage) => {
+        onSessionUpdate: (newSessionId, sentMessage, done) => {
           // Only update the UI if the user hasn't navigated away from this
           // session during streaming.
           const currentId = this.sessionsStore.currentSessionId;
@@ -344,24 +370,40 @@ export default {
             currentId === sendingSessionId ||
             currentId === newSessionId;
 
+          // On early session_id event (done=false), update the sidebar
+          // immediately so the session appears mid-stream.
+          if (newSessionId && !currentId) {
+            this.sessionsStore.currentSessionId = newSessionId;
+            if (!done) {
+              this.sessionsStore.loadSessions();
+            }
+          }
+
           if (stillOnSameSession) {
-            // Commit the assistant message from the per-session state
-            const st = this.chatStore.getStreamState(sendingSessionId);
-            if (st.streamingMsg) {
-              this.sessionsStore.allMessages.push({
-                role: "assistant",
-                content: st.streamingMsg,
-                source: "assistant",
-              });
+            if (done) {
+              // Commit the assistant message from the per-session state
+              const st = this.chatStore.getStreamState(sendingSessionId);
+              if (st.streamingMsg) {
+                this.sessionsStore.allMessages.push({
+                  role: "assistant",
+                  content: st.streamingMsg,
+                  source: "assistant",
+                  tool_calls: st.toolCalls?.length ? st.toolCalls : undefined,
+                });
+              }
+              if (newSessionId && newSessionId !== currentId) {
+                this.loadSessionModel(newSessionId);
+              }
+              // If this was a /model command, refresh the model selector badge
+              if (sentMessage && sentMessage.startsWith('/model ')) {
+                this.loadSessionModel(resolvedId);
+              }
+              this.sessionsStore.currentSessionId = resolvedId;
+              this.sessionsStore.loadSessions();
             }
-            if (newSessionId && newSessionId !== currentId) {
-              this.loadSessionModel(newSessionId);
-            }
-            // If this was a /model command, refresh the model selector badge
-            if (sentMessage && sentMessage.startsWith('/model ')) {
-              this.loadSessionModel(resolvedId);
-            }
-            this.sessionsStore.currentSessionId = resolvedId;
+          } else if (!done && newSessionId) {
+            // User navigated away during streaming — still refresh the sidebar
+            // so the new session appears in the list.
             this.sessionsStore.loadSessions();
           }
           this.$nextTick(() => this.scrollToBottom());
@@ -448,6 +490,7 @@ export default {
         clearTimeout(this._bannerTimer);
         this._bannerTimer = null;
       }
+      this.stopActivityPolling();
     },
     /** Start polling for active sessions (for reload resilience). */
     startActiveSessionPolling() {
@@ -457,6 +500,34 @@ export default {
       }, 3000);
       // Also fetch immediately
       this.chatStore.fetchActiveSessions();
+    },
+    /** Poll agent activity for the current session (for reload banner). */
+    _pollCurrentActivity() {
+      const sid = this.sessionsStore.currentSessionId;
+      if (!sid) return;
+      if (!this.chatStore.isSessionActive(sid)) return;
+      // Don't poll if we have a local stream going
+      const state = this.chatStore.getStreamState(sid);
+      if (state.sending) return;
+      // Don't poll if the session just completed locally
+      if (this.chatStore.locallyCompletedSessions.has(sid)) return;
+      this.chatStore.fetchAgentActivity(sid);
+    },
+    /** Start polling for per-session activity (triggered when banner shows). */
+    startActivityPolling() {
+      this.stopActivityPolling();
+      // Poll more frequently for live activity updates
+      this._activityTimer = setInterval(() => {
+        this._pollCurrentActivity();
+      }, 2000);
+      this._pollCurrentActivity();
+    },
+    /** Stop polling for per-session activity. */
+    stopActivityPolling() {
+      if (this._activityTimer) {
+        clearInterval(this._activityTimer);
+        this._activityTimer = null;
+      }
     },
     /** Stop polling for active sessions. */
     stopActiveSessionPolling() {
@@ -500,7 +571,13 @@ export default {
         return false
       }
       return this.chatStore.isSessionActive(sid);
-    },  // <-- keep comma here
+    },
+    /** Activity metadata for the reconnecting banner. */
+    reconnectingActivity() {
+      const sid = this.sessionsStore.currentSessionId
+      if (!sid) return {}
+      return this.chatStore.agentActivity[sid] || {}
+    },
   },
 };
 </script>
