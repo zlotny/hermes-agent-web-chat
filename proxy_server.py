@@ -11,8 +11,8 @@ Usage:
 
 Environment:
     BACKEND_HOST  — host backend address (default: host.docker.internal)
-    BACKEND_PORT  — host backend port (default: 8001)
-    PORT          — this server's port (default: 8000)
+    BACKEND_PORT  — host backend port (default: 11300)
+    PORT          — this server's port (default: 11300)
 """
 
 import asyncio
@@ -29,8 +29,8 @@ except ImportError:
     sys.exit(1)
 
 BACKEND_HOST = os.getenv("BACKEND_HOST", "172.17.0.1")
-BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8001"))
-SPA_PORT = int(os.getenv("PORT", "8000"))
+BACKEND_PORT = int(os.getenv("BACKEND_PORT", "11300"))
+SPA_PORT = int(os.getenv("PORT", "11300"))
 SPA_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
 
 

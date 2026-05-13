@@ -42,25 +42,34 @@ No Hermes ports exposed. No config changes needed. The only difference is the UI
 - A working [Hermes Agent](https://github.com/NousResearch/hermes-agent) installation at `~/.hermes/` with a configured provider (run `hermes setup` first)
 - Python 3.11+
 
-### Run locally
+---
+
+### Scenario 1 — Bare-metal (single machine, simplest)
+
+Build the frontend once, then the backend serves everything on a single port.
 
 ```bash
-# Terminal 1 — backend
+# 1. Install backend deps
 cd backend
 pip install -r requirements.txt
+
+# 2. Build the frontend
+cd ../frontend
+npm install && npm run build
+
+# 3. Run the backend (serves the built SPA at /)
+cd ../backend
 HERMES_HOME=$HOME/.hermes \
 HERMES_SRC=$HOME/.hermes/hermes-agent \
 AUTH_PASSWORD=changeme \
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 2 — frontend (dev server)
-cd frontend
-npm install && npm run dev
+uvicorn main:app --host 0.0.0.0 --port 11300
 ```
 
-Open **http://localhost:5173** and log in.
+Open **http://localhost:11300** and log in. The FastAPI app statically serves the Vue SPA from `frontend/dist/` — no separate web server needed.
 
-### Deploy with Docker + reverse proxy
+---
+
+### Scenario 2 — Docker with Traefik + host backend
 
 The Vue SPA runs in Docker, but the Python backend runs **directly on the host** so the agent's terminal tool sees your real filesystem.
 
@@ -72,7 +81,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now hermes-agent-web-chat-backend.service
 ```
 
-Backend listens on port **8001** (not exposed to the internet).
+Backend listens on port **11300** (not exposed to the internet).
 
 #### 2 — Container (SPA + API proxy)
 
@@ -80,10 +89,10 @@ Backend listens on port **8001** (not exposed to the internet).
 docker build --no-cache-filter=frontend -t hermes-agent-web-chat .
 docker run -d --name hermes-ndrs-es --restart unless-stopped \
   -e BACKEND_HOST=172.17.0.1 \
-  -e BACKEND_PORT=8001 \
+  -e BACKEND_PORT=11300 \
   -l traefik.enable=true \
   -l traefik.frontend.rule=Host=hermes.yourdomain.com \
-  -l traefik.port=8000 \
+  -l traefik.port=11300 \
   -l traefik.protocol=http \
   hermes-agent-web-chat
 ```
@@ -92,6 +101,31 @@ The container serves the SPA and proxies `/api/*` to the host. Traefik terminate
 
 > `BACKEND_HOST` is typically `172.17.0.1` (Docker gateway). On macOS/Windows use `host.docker.internal`.
 
+---
+
+### Scenario 3 — Dev mode (hot-reload)
+
+Two terminals — backend with auto-reload, frontend with Vite HMR and API proxy.
+
+```bash
+# Terminal 1 — backend (hot-reload on Python changes)
+cd backend
+HERMES_HOME=$HOME/.hermes \
+HERMES_SRC=$HOME/.hermes/hermes-agent \
+AUTH_PASSWORD=changeme \
+uvicorn main:app --host 0.0.0.0 --port 11300 --reload
+
+# Terminal 2 — frontend (HMR with API proxy to backend)
+cd frontend
+npm install && npm run dev
+```
+
+Open **http://localhost:5173** — Vite proxies `/api/*` requests to `localhost:11300` automatically.
+
+No Docker needed during development. Changes to Python files auto-reload the backend; changes to Vue files reflect instantly via Vite HMR.
+
+---
+
 ### Configuration
 
 | Env var | Default | Description |
@@ -99,32 +133,4 @@ The container serves the SPA and proxies `/api/*` to the host. Traefik terminate
 | `AUTH_PASSWORD` | `changeme` | Login password (required) |
 | `HERMES_HOME` | `~/.hermes` | Hermes Agent data directory |
 | `HERMES_SRC` | `$HERMES_HOME/hermes-agent` | Hermes Agent source path |
-| `PORT` | `8000` | HTTP listen port |
-
----
-
-## Dev
-
-```bash
-# Backend (hot-reload on Python changes)
-cd backend
-HERMES_HOME=$HOME/.hermes \
-HERMES_SRC=$HOME/.hermes/hermes-agent \
-AUTH_PASSWORD=changeme \
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-# Frontend (HMR, access via localhost:5173)
-cd frontend
-npm run dev
-
-# Container rebuild (when frontend changes)
-docker build -t hermes-agent-web-chat .
-docker run -d --name hermes-ndrs-es --restart unless-stopped \
-  -e BACKEND_HOST=172.17.0.1 \
-  -e BACKEND_PORT=8001 \
-  -l traefik.enable=true \
-  -l traefik.frontend.rule=Host=hermes.yourdomain.com \
-  -l traefik.port=8000 \
-  -l traefik.protocol=http \
-  hermes-agent-web-chat
-```
+| `PORT` | `11300` | HTTP listen port |

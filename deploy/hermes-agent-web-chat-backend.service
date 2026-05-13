@@ -11,9 +11,9 @@ WorkingDirectory=/home/ndrs/hermes-agent-web-chat/backend
 Environment=HERMES_HOME=/home/ndrs/.hermes
 Environment=HERMES_SRC=/home/ndrs/.hermes/hermes-agent
 Environment=AUTH_PASSWORD=lWDe0pYPJAvzGrGi
-Environment=PORT=8001
+Environment=PORT=11300
 
-ExecStart=/home/ndrs/.hermes/hermes-agent/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8001
+ExecStart=/home/ndrs/.hermes/hermes-agent/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 11300
 
 Restart=always
 RestartSec=5

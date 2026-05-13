@@ -17,5 +17,5 @@ RUN pip install --no-cache-dir aiohttp
 COPY proxy_server.py .
 COPY --from=frontend /build/dist /app/frontend/dist
 
-EXPOSE 8000
+EXPOSE 11300
 CMD ["python3", "proxy_server.py"]
