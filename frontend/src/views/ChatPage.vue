@@ -51,6 +51,7 @@
       <div
         v-if="!isDesktop"
         class="flex items-center justify-between px-4 py-3 border-b border-border bg-surface"
+        style="padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));"
       >
         <button
           @click="sidebarOpen = true"
@@ -177,7 +178,7 @@
           currentStream.streamingMsg ||
           currentStream.status
         "
-        class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-app-bg/90 via-app-bg/60 to-transparent pt-8 pb-4 px-4 pointer-events-none"
+        class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-app-bg/90 via-app-bg/60 to-transparent pt-8 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] px-4 pointer-events-none"
       >
         <div
           class="max-w-[800px] w-full mx-auto px-2 sm:px-0 pointer-events-auto relative"

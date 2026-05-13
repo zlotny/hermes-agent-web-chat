@@ -48,6 +48,17 @@ body {
   margin: 0;
 }
 
+/* Prevent iOS Safari auto-zoom on input focus — needs >= 16px */
+@media screen and (max-width: 768px) {
+
+  input[type="text"],
+  input[type="password"],
+  input[type="search"],
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* ── Scrollbar styling — minimal ── */
 ::-webkit-scrollbar {
   width: 3px;

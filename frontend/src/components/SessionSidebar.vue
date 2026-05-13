@@ -8,7 +8,7 @@
   >
     <div v-if="open" class="flex flex-col h-full min-w-[280px]">
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-4 border-b border-border">
+      <div class="flex items-center justify-between px-4 py-4 border-b border-border" style="padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));">
         <h2 class="text-sm font-semibold tracking-wide">Sessions</h2>
         <div class="flex items-center gap-1">
           <!-- Only show + when there's an active chat session -->

@@ -1,5 +1,6 @@
 <template>
-  <div class="min-h-screen bg-app-bg flex items-center justify-center relative overflow-hidden">
+  <div class="min-h-screen bg-app-bg flex items-center justify-center relative overflow-hidden"
+    style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);">
     <!-- Animated noise grain overlay -->
     <div class="noise"></div>
 
