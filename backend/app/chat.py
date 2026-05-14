@@ -443,8 +443,25 @@ async def chat_stream(req: ChatRequest):
                 if existing_stop and existing_stop.is_set():
                     return
 
+            # ── Load conversation history for existing sessions ──────────
+            # Without this, every turn starts with an empty message list and
+            # the agent has no memory of the prior conversation. The session
+            # ID is passed so new messages ARE persisted to the DB — but
+            # existing messages were never loaded back as input context.
+            conversation_history = None
+            if not is_new_chat and agent_session_id:
+                try:
+                    existing_msgs = get_db().get_messages(agent_session_id)
+                    if existing_msgs:
+                        conversation_history = existing_msgs
+                except Exception:
+                    pass  # Non-fatal — agent runs with empty history
+
             result = await loop.run_in_executor(
-                None, lambda: agent.run_conversation(user_message=req.message)
+                None, lambda: agent.run_conversation(
+                    user_message=req.message,
+                    conversation_history=conversation_history,
+                )
             )
             new_sid = result.get("session_id") or real_sid or ""
             result_holder["session_id"] = new_sid
