@@ -45,7 +45,7 @@
         <span>Hermes</span>
         <span v-if="message.timestamp" class="text-[10px] font-normal normal-case text-muted/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{{ formatMsgTime(message.timestamp) }}</span>
       </div>
-      <div class="px-1 text-sm leading-relaxed whitespace-pre-wrap break-words" v-html="renderedContent"></div>
+      <div class="px-1 text-sm leading-relaxed break-words markdown-content" v-html="renderedContent"></div>
       <!-- Tool calls within this message -->
       <div v-if="message.tool_calls && message.tool_calls.length" class="mt-2">
         <ToolChain :tool-calls="message.tool_calls" />

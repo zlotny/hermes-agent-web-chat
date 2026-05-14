@@ -14,8 +14,8 @@
       </div>
 
       <!-- Streaming text with blinking cursor -->
-      <div v-if="text" class="px-1 text-sm leading-relaxed whitespace-pre-wrap break-words">
-        <span v-html="renderedText"></span>
+      <div v-if="text" class="px-1 text-sm leading-relaxed break-words">
+        <div class="markdown-content" v-html="renderedText"></div>
         <span class="inline-block w-[2px] h-[1em] bg-accent ml-0.5 animate-blink align-middle"></span>
       </div>
 

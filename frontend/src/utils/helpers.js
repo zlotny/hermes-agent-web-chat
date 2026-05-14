@@ -42,23 +42,26 @@ export function shortModel(name) {
   return short
 }
 
-// ── Content rendering (markdown-like → HTML) ─────────────────────────────
+// ── Content rendering (markdown → HTML) ─────────────────────────────────
+
+import { marked } from "marked"
+import DOMPurify from "dompurify"
+
+// Configure marked for GFM (tables, strikethrough, etc.) + line breaks
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+})
 
 /**
- * Convert simple markdown patterns to HTML.
- * Handles: ```code blocks```, `inline code`, **bold**, and paragraphs.
+ * Render markdown text to sanitized HTML.
+ * Supports full GFM: headings, lists, tables, code blocks, blockquotes,
+ * links, images, bold, italic, strikethrough, inline code, and more.
  */
 export function renderContent(text) {
   if (!text) return ""
-  let h = text.replace(
-    /```(\w*)\n([\s\S]*?)```/g,
-    '<pre><code>$2</code></pre>',
-  )
-  h = h.replace(/`([^`]+)`/g, "<code>$1</code>")
-  h = h.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-  h = h.replace(/\n\n/g, "</p><p>")
-  h = h.replace(/\n/g, "<br>")
-  return "<p>" + h + "</p>"
+  const raw = marked.parse(text)
+  return DOMPurify.sanitize(raw)
 }
 
 // ── Tool call formatting ─────────────────────────────────────────────────
