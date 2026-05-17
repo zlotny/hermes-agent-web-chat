@@ -1,7 +1,7 @@
 <template>
   <aside
     :class="[
-      'bg-surface border-r border-border flex flex-col overflow-hidden transition-all duration-300 z-30',
+      'bg-surface border-r border-border flex flex-col transition-all duration-300 z-30',
       isDesktop ? 'relative' : 'fixed left-0 top-0 h-full',
       open ? (isDesktop ? 'w-[280px] min-w-[280px]' : 'w-[280px]') : 'w-0 min-w-0 border-0',
     ]"

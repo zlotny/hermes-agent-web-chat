@@ -73,7 +73,7 @@
 
       <!-- Edit core files -->
       <div
-          <div class="flex items-center justify-between px-3 py-2 hover:bg-hover-bg cursor-pointer transition-colors"
+        class="flex items-center justify-between px-3 py-2 hover:bg-hover-bg cursor-pointer transition-colors"
         @click="editorOpen = true"
       >
         <span class="text-xs">Edit core files</span>

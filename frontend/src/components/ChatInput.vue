@@ -280,6 +280,13 @@ export default {
         return
       }
       this.$emit('send')
+      // Reset textarea height after the model value gets cleared on send
+      this.$nextTick(() => {
+        const el = this.$refs.textareaRef;
+        if (el) {
+          el.style.height = "auto";
+        }
+      })
     },
 
     onKeydown(e) {
@@ -316,6 +323,10 @@ export default {
         this.commandSelectorOpen = false
       }
       this.$emit('send')
+      this.$nextTick(() => {
+        const el = this.$refs.textareaRef;
+        if (el) el.style.height = "auto";
+      })
     },
 
     // ── Existing methods ─────────────────────────────────────────────
