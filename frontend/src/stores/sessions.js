@@ -195,6 +195,33 @@ export const useSessionsStore = defineStore('sessions', () => {
     allMessages.value = []
   }
 
+  async function deleteSession(sessionId) {
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      })
+      if (!res.ok) throw new Error(await res.text())
+      // Remove from sidebar
+      const idx = allSessions.value.findIndex(s => s.id === sessionId)
+      if (idx !== -1) {
+        allSessions.value.splice(idx, 1)
+      }
+      // Clear message cache
+      clearMessageCache(sessionId)
+      totalSessions.value = Math.max(0, totalSessions.value - 1)
+      loadedCount.value = Math.max(0, loadedCount.value - 1)
+      // If the deleted session was the active one, redirect to new chat
+      if (currentSessionId.value === sessionId) {
+        newChat()
+      }
+      return true
+    } catch (e) {
+      sidebarError.value = 'Failed to delete: ' + e.message
+      return false
+    }
+  }
+
   return {
     // state
     allSessions,
@@ -222,6 +249,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     addPlaceholderSession,
     replaceSessionId,
     updateSessionInPlace,
+    deleteSession,
     newChat,
   }
 })

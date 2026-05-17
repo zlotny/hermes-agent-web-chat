@@ -8,7 +8,7 @@
         : 'hover:bg-hover-bg',
     ]"
   >
-    <div class="truncate text-[13px] mb-0.5 flex items-center gap-1.5 relative z-[1]">
+    <div class="text-[13px] mb-0.5 flex items-center gap-1.5 relative z-[1] min-w-0">
       <!-- Active pulsing dot -->
       <span
         v-if="agentActive"
@@ -30,8 +30,19 @@
       >
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
-      <span v-if="isUntitled" class="italic text-muted/60">New session…</span>
-      <span v-else>{{ session.title }}</span>
+      <span v-if="isUntitled" class="italic text-muted/60 truncate">New session…</span>
+      <span v-else class="truncate group-hover:pr-5">{{ session.title }}</span>
+      <!-- Delete button on hover, top-right of the card -->
+      <button
+        @click.stop="$emit('delete')"
+        class="absolute -right-0.5 -top-0.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-muted/40 hover:text-red-500 hover:bg-red-500/10"
+        title="Delete session"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </svg>
+      </button>
     </div>
     <div class="flex items-center justify-between text-muted text-[11px] ml-[22px] relative z-[1]">
       <!-- Default state: model + message count -->
@@ -57,7 +68,7 @@ export default {
     isActive: { type: Boolean, default: false },
     agentActive: { type: Boolean, default: false },
   },
-  emits: ['select'],
+  emits: ['select', 'delete'],
   computed: {
     /** Detect sessions whose title is still a raw Hermes auto-generated ID
      *  (YYYYMMDD_HHMMSS_XXXXXX format, 27 chars with underscores) or empty. */

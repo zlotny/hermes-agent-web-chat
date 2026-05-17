@@ -63,6 +63,7 @@
             :is-active="s.id === sessionsStore.currentSessionId"
             :agent-active="chatStore.isSessionActive(s.id)"
             @select="loadSession(s.id)"
+            @delete="onDeleteSession(s.id)"
           />
           <!-- Loading indicator for scroll-triggered loads -->
           <div
@@ -141,6 +142,15 @@ export default {
     loadSession(id) {
       this.sessionsStore.loadSession(id)
       if (!this.isDesktop) this.$emit('close')
+    },
+    async onDeleteSession(id) {
+      const wasActive = id === this.sessionsStore.currentSessionId
+      await this.sessionsStore.deleteSession(id)
+      // If the deleted session was the one being viewed, redirect to new chat
+      if (wasActive) {
+        this.sessionsStore.newChat()
+        if (!this.isDesktop) this.$emit('close')
+      }
     },
     onSessionListScroll() {
       const el = this.$refs.sessionListRef

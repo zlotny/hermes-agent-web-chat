@@ -66,6 +66,24 @@ async def list_sessions(limit: int = 0, offset: int = 0, show_crons: bool = Fals
     return {"sessions": page, "total": total}
 
 
+@router.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """Delete a session and all its messages via Hermes' SessionDB."""
+    db = get_db()
+    loop = asyncio.get_event_loop()
+    try:
+        deleted = await loop.run_in_executor(
+            None, lambda: db.delete_session(session_id)
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"ok": True, "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 from app.config import DEBUG
 
 
