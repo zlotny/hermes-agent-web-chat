@@ -53,12 +53,41 @@ export default {
     toolText: { type: String, default: '' },
     toolCalls: { type: Array, default: () => [] },
   },
+  data() {
+    return {
+      _renderCache: null,
+      _rafId: null,
+    }
+  },
+  watch: {
+    text() {
+      // Throttle markdown rendering to ~60fps during streaming
+      if (this.status === 'sending' || this.status === 'thinking') {
+        if (!this._rafId) {
+          this._rafId = requestAnimationFrame(() => {
+            this._rafId = null
+            this._renderCache = null
+          })
+        }
+      } else {
+        this._renderCache = null
+      }
+    },
+  },
+  beforeUnmount() {
+    if (this._rafId) cancelAnimationFrame(this._rafId)
+  },
   computed: {
     visible() {
       return !!(this.text || this.status === 'sending' || this.status === 'thinking' || this.toolText || this.toolCalls.length)
     },
     renderedText() {
-      return renderContent(this.text)
+      if (this._renderCache?.input === this.text) {
+        return this._renderCache.output
+      }
+      const output = renderContent(this.text)
+      this._renderCache = { input: this.text, output }
+      return output
     },
   },
 }

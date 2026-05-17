@@ -37,6 +37,33 @@ import threading as _threading
 _agent_activity: dict[str, dict] = {}
 _agent_activity_lock = _threading.Lock()
 
+# Per-session transient state for reload resilience.
+# Keyed by real Hermes session ID. Stores the user message and live
+# tool/thinking progress so the frontend can reconstruct the chat view
+# after a page reload while the agent is still running.
+# This is the ONLY source of truth for in-flight session state — it is
+# NOT persisted to the DB or shared with Hermes internals.
+_chat_transients: dict[str, dict] = {}
+_chat_transients_lock = _threading.Lock()
+
+
+@router.get("/api/chat/transient/{session_id}")
+async def get_chat_transient(session_id: str):
+    """Return transient in-flight state for a session, or 404 if none."""
+    with _chat_transients_lock:
+        state = _chat_transients.get(session_id)
+        if state is None:
+            return JSONResponse(status_code=404, content={"error": "No transient state"})
+        return {
+            "session_id": session_id,
+            "user_message": state.get("user_message", ""),
+            "streaming_msg": state.get("streaming_msg", ""),
+            "tool_calls": state.get("tool_calls", []),
+            "current_tool_name": state.get("current_tool_name", ""),
+            "current_tool_preview": state.get("current_tool_preview", ""),
+            "status_detail": state.get("status_detail", ""),
+        }
+
 # Per-session stop events — set when stop is requested, checked by SSE generator
 _stop_events: dict[str, asyncio.Event] = {}
 _stop_events_lock = asyncio.Lock()
@@ -145,6 +172,7 @@ async def _cleanup_stale_clis():
                     _session_clis.pop(sid, None)
                     _session_cli_timestamps.pop(sid, None)
                     _usage_snapshots.pop(sid, None)
+                    _chat_transients.pop(sid, None)
                 if stale:
                     logger.debug("Cleaned up %d stale CLI instances", len(stale))
         except asyncio.CancelledError:
@@ -334,6 +362,7 @@ async def get_session_active_status(session_id: str):
             activity = {}
         return {
             "session_id": session_id,
+            "user_message": activity.get("user_message", ""),
             "tool_name": activity.get("tool_name", ""),
             "tool_preview": activity.get("tool_preview", ""),
             "token_snippet": activity.get("token_snippet", ""),
@@ -407,35 +436,44 @@ async def chat_stream(req: ChatRequest):
     def on_delta(delta: str) -> None:
         if delta is not None:
             q.put_nowait(("token", delta))
-            # Track latest token snippet for reload resilience
-            snippet = delta.strip()[:120]
-            if snippet:
-                with _agent_activity_lock:
-                    _real = result_holder.get("session_id", "")
-                    if _real:
-                        act = _agent_activity.setdefault(_real, {})
-                        act["token_snippet"] = snippet
+            with _chat_transients_lock:
+                _real = result_holder.get("session_id", "")
+                if _real and _real in _chat_transients:
+                    _chat_transients[_real]["streaming_msg"] += delta
 
     def on_tool_progress(kind: str, name: str, preview: str, args: dict) -> None:
         q.put_nowait(("tool_start", {"name": name, "preview": preview}))
-        with _agent_activity_lock:
+        with _chat_transients_lock:
             _real = result_holder.get("session_id", "")
-            if _real:
-                act = _agent_activity.setdefault(_real, {})
-                act["tool_name"] = name
-                act["tool_preview"] = preview
-                act["status_detail"] = f"running tool: {name}"
+            if _real and _real in _chat_transients:
+                t = _chat_transients[_real]
+                t["current_tool_name"] = name
+                t["current_tool_preview"] = preview
+                t["status_detail"] = f"running tool: {name}"
+                # Append to tool_calls list so we can show the chain
+                t["tool_calls"].append({
+                    "name": name,
+                    "preview": preview,
+                    "args": args or {},
+                    "status": "running",
+                })
 
     def on_tool_complete(tc_id: str, name: str, args: dict, result: str) -> None:
         preview = (result or "")[:80]
         q.put_nowait(("tool_complete", {"name": name, "preview": preview, "args": args}))
-        with _agent_activity_lock:
+        with _chat_transients_lock:
             _real = result_holder.get("session_id", "")
-            if _real:
-                act = _agent_activity.setdefault(_real, {})
-                act["tool_name"] = ""
-                act["tool_preview"] = ""
-                act["status_detail"] = ""
+            if _real and _real in _chat_transients:
+                t = _chat_transients[_real]
+                t["current_tool_name"] = ""
+                t["current_tool_preview"] = ""
+                t["status_detail"] = ""
+                # Mark the most recent matching tool as complete
+                for tc in reversed(t["tool_calls"]):
+                    if tc["name"] == name and tc["status"] == "running":
+                        tc["status"] = "complete"
+                        tc["result_preview"] = preview
+                        break
 
     def on_status(kind: str, message: str) -> None:
         if kind == "lifecycle":
@@ -572,6 +610,16 @@ async def chat_stream(req: ChatRequest):
             if real_sid:
                 with _agent_activity_lock:
                     _agent_activity[real_sid] = {}
+                # Save transient state so the frontend can find the chat on reload
+                with _chat_transients_lock:
+                    _chat_transients[real_sid] = {
+                        "user_message": req.message,
+                        "streaming_msg": "",
+                        "tool_calls": [],
+                        "current_tool_name": "",
+                        "current_tool_preview": "",
+                        "status_detail": "starting…",
+                    }
 
             # Check if stop was already requested while we were setting up
             async with _stop_events_lock:
@@ -661,6 +709,10 @@ async def chat_stream(req: ChatRequest):
                             _session_cli_timestamps[real_sid] = time.time()
                     except Exception:
                         pass
+                # Clear transient state — agent is done
+                if real_sid:
+                    with _chat_transients_lock:
+                        _chat_transients.pop(real_sid, None)
                 async with _active_agents_lock:
                     if real_sid:
                         _active_agents.pop(real_sid, None)

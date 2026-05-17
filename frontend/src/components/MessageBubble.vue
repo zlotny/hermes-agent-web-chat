@@ -13,7 +13,7 @@
         {{ message.content }}
       </div>
       <!-- Copy button -->
-      <div class="absolute -top-0.5 -right-9 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div class="absolute -top-0.5 -right-9 items-center gap-1 hidden group-hover:flex transition-none">
         <button
           title="Copy message"
           @click="copyContent"
@@ -51,7 +51,7 @@
         <ToolChain :tool-calls="message.tool_calls" />
       </div>
       <!-- Copy button (no longer has timestamp, it's in the header) -->
-      <div class="absolute top-0 -right-9 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div class="absolute top-0 -right-9 items-center gap-1 hidden group-hover:flex transition-none">
         <button
           title="Copy message"
           @click="copyContent"

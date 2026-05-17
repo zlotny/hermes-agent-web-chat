@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useChatStore } from './chat'
 
 const PAGE_SIZE = 20
@@ -23,6 +23,20 @@ export const useSessionsStore = defineStore('sessions', () => {
   const showCrons = ref(false)
   const showSystemMessages = ref(false)
   const searchQuery = ref('')
+  let _searchDebounce = null
+  const _rawSearch = ref('')
+
+  // Pending response tracking: set when transient in-flight state exists.
+  // Stores the FULL streaming data so the UI can reconstruct the chat view
+  // after a page reload as if the agent was never interrupted.
+  const pendingResponse = ref(false)
+  const pendingStreamingMsg = ref('')
+  const pendingToolCalls = ref([])
+  const pendingCurrentToolName = ref('')
+  const pendingCurrentToolPreview = ref('')
+  const pendingStatusDetail = ref('')
+  let _pendingTransientTimer = null
+  let _pendingSessionTimer = null
 
   // --- Getters ---
   const filteredSessions = computed(() => {
@@ -76,6 +90,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  // Debounced search — only recompute filteredSessions after 150ms idle
+  watch(_rawSearch, (val) => {
+    if (_searchDebounce) clearTimeout(_searchDebounce)
+    _searchDebounce = setTimeout(() => {
+      searchQuery.value = val
+    }, 150)
+  })
+
   const loadingMessageId = ref(null)
 
   async function loadSession(id) {
@@ -112,6 +134,12 @@ export const useSessionsStore = defineStore('sessions', () => {
         }
       }
 
+      // Auto-detect: if the last message in the DB is from user, the agent
+      // was mid-response when we reloaded. Show thinking indicator and poll.
+      // Also check for transient state (in-flight message not yet in DB).
+      // After loading DB messages, check for transient in-flight state
+      _checkTransientState(id)
+
       if (data.model) {
         chatStore.setCurrentModel(data.model)
       }
@@ -127,6 +155,108 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (sessionId && allMessages.value.length) {
       messageCache.value = { ...messageCache.value, [sessionId]: [...allMessages.value] }
     }
+  }
+
+  /** Check for transient in-flight state and start polling. */
+  async function _checkTransientState(sessionId) {
+    try {
+      const res = await fetch(`/api/chat/transient/${encodeURIComponent(sessionId)}`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data || !data.session_id) return
+
+      // Inject user message from transient. Skip only if the last DB
+      // message is already the same user message (no duplication).
+      if (data.user_message) {
+        const last = allMessages.value[allMessages.value.length - 1]
+        const alreadyPresent = last && last.role === 'user' && last.content === data.user_message
+        if (!alreadyPresent) {
+          allMessages.value.push({ role: 'user', content: data.user_message, source: 'user' })
+        }
+      }
+
+      // Populate pending state with FULL transient data
+      pendingResponse.value = true
+      pendingStreamingMsg.value = data.streaming_msg || ''
+      pendingCurrentToolName.value = data.current_tool_name || ''
+      pendingCurrentToolPreview.value = data.current_tool_preview || ''
+      pendingStatusDetail.value = data.status_detail || ''
+      // Map tool_calls to the format ToolChain expects
+      pendingToolCalls.value = (data.tool_calls || []).filter(tc => tc.status === 'running').map(tc => ({
+        id: 'rtc_' + tc.name,
+        function: { name: tc.name, arguments: tc.preview || '' },
+      }))
+
+      // Poll for updates (transient changes) and completion (transient disappears)
+      _pendingTransientTimer = setInterval(async () => {
+        try {
+          const r2 = await fetch(`/api/chat/transient/${encodeURIComponent(sessionId)}`, {
+            credentials: 'same-origin',
+          })
+          if (r2.status === 404) {
+            // Agent finished — reload from DB
+            clearInterval(_pendingTransientTimer)
+            _pendingTransientTimer = null
+            _reloadFromDb(sessionId)
+            return
+          }
+          if (!r2.ok) return
+          const d = await r2.json()
+          if (!d || !d.session_id) return
+          pendingStreamingMsg.value = d.streaming_msg || ''
+          pendingCurrentToolName.value = d.current_tool_name || ''
+          pendingCurrentToolPreview.value = d.current_tool_preview || ''
+          pendingStatusDetail.value = d.status_detail || ''
+          pendingToolCalls.value = (d.tool_calls || []).filter(tc => tc.status === 'running').map(tc => ({
+            id: 'rtc_' + tc.name,
+            function: { name: tc.name, arguments: tc.preview || '' },
+          }))
+        } catch {
+          // retry
+        }
+      }, 1000)
+    } catch {
+      // No transient state — nothing to do
+    }
+  }
+
+  async function _reloadFromDb(sessionId) {
+    _clearPendingState()
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      allMessages.value = data.messages || []
+    } catch {
+      // ignore
+    }
+  }
+
+  function newChat() {
+    _clearPendingState()
+    currentSessionId.value = null
+    allMessages.value = []
+  }
+
+  function _clearPendingState() {
+    if (_pendingTransientTimer) {
+      clearInterval(_pendingTransientTimer)
+      _pendingTransientTimer = null
+    }
+    if (_pendingSessionTimer) {
+      clearInterval(_pendingSessionTimer)
+      _pendingSessionTimer = null
+    }
+    pendingResponse.value = false
+    pendingStreamingMsg.value = ''
+    pendingToolCalls.value = []
+    pendingCurrentToolName.value = ''
+    pendingCurrentToolPreview.value = ''
+    pendingStatusDetail.value = ''
   }
 
   function clearMessageCache(sessionId) {
@@ -191,6 +321,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function newChat() {
+    _clearPendingState()
     currentSessionId.value = null
     allMessages.value = []
   }
@@ -236,7 +367,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     loadingMessageId,
     showCrons,
     showSystemMessages,
+    _rawSearch,
     searchQuery,
+    pendingResponse,
+    pendingStreamingMsg,
+    pendingToolCalls,
+    pendingCurrentToolName,
+    pendingCurrentToolPreview,
+    pendingStatusDetail,
     filteredSessions,
     // getters
     hasMore,

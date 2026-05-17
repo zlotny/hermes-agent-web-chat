@@ -2,14 +2,12 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
-import LoginPage from './views/LoginPage.vue'
-import ChatPage from './views/ChatPage.vue'
 import { useSettingsStore } from './stores/settings'
 import './style.css'
 
 const routes = [
-  { path: '/login', component: LoginPage },
-  { path: '/', component: ChatPage },
+  { path: '/login', component: () => import('./views/LoginPage.vue') },
+  { path: '/', component: () => import('./views/ChatPage.vue') },
 ]
 
 const router = createRouter({

@@ -250,10 +250,13 @@ export const useChatStore = defineStore('chat', () => {
   async function fetchActiveSessions() {
     try {
       const res = await fetch('/api/chat/active', { credentials: 'same-origin' })
-      if (!res.ok) return
+      if (!res.ok) return 0
       const data = await res.json()
       activeSessions.value = new Set(data.active_sessions || [])
-    } catch {}
+      return activeSessions.value.size
+    } catch {
+      return 0
+    }
   }
 
   function isSessionActive(sessionId) {

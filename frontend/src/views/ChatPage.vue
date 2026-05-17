@@ -101,49 +101,6 @@
         class="flex-1 overflow-y-auto overflow-x-hidden relative"
         @scroll="onScroll"
       >
-        <!-- Reconnecting banner (shown on reload while agent is active) -->
-        <div
-          v-if="showReconnectingBanner"
-          class="sticky top-0 z-10 mx-4 mt-4 px-4 py-3 bg-orange-900/30 border border-orange-700/50 text-orange-300 text-xs flex items-center gap-2"
-        >
-          <svg
-            class="animate-spin h-3.5 w-3.5 flex-shrink-0"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            />
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <span class="flex-1">
-            <template v-if="reconnectingActivity.tool_name">
-              Running tool: <strong>{{ reconnectingActivity.tool_name }}</strong>
-              <span v-if="reconnectingActivity.tool_preview" class="text-orange-300/70"> — {{ reconnectingActivity.tool_preview }}</span>
-            </template>
-            <template v-else-if="reconnectingActivity.token_snippet">
-              Generating response…
-              <span class="text-orange-300/70 italic">{{ reconnectingActivity.token_snippet.slice(0, 60) }}</span>
-            </template>
-            <template v-else-if="reconnectingActivity.status_detail">
-              {{ reconnectingActivity.status_detail }}
-            </template>
-            <template v-else>
-              Reconnecting — agent is still generating a response…
-            </template>
-          </span>
-        </div>
-
         <!-- Empty state -->
         <EmptyState
           ref="emptyState"
@@ -161,11 +118,11 @@
         <MessageList
           v-else
           :messages="sessionsStore.allMessages"
-          :streaming-msg="currentStream.streamingMsg"
-          :streaming-tool="currentStream.streamingTool"
-          :streaming-tool-calls="currentStream.toolCalls"
-          :status="currentStream.status"
-          :status-detail="currentStream.statusDetail"
+          :streaming-msg="currentStream.streamingMsg || (sessionsStore.pendingResponse ? sessionsStore.pendingStreamingMsg : '')"
+          :streaming-tool="currentStream.streamingTool || (sessionsStore.pendingCurrentToolName ? sessionsStore.pendingCurrentToolName + (sessionsStore.pendingCurrentToolPreview ? ': ' + sessionsStore.pendingCurrentToolPreview : '') : '')"
+          :streaming-tool-calls="currentStream.toolCalls.length ? currentStream.toolCalls : sessionsStore.pendingToolCalls"
+          :status="currentStream.status || (sessionsStore.pendingResponse ? 'thinking' : '')"
+          :status-detail="currentStream.statusDetail || (sessionsStore.pendingResponse ? sessionsStore.pendingStatusDetail || (sessionsStore.pendingCurrentToolName ? 'running tool: ' + sessionsStore.pendingCurrentToolName : 'thinking…') : '')"
           :error="currentStream.loadError"
           :show-system-messages="sessionsStore.showSystemMessages"
         />
@@ -249,9 +206,6 @@ export default {
       isDesktop: true,
       wasDesktop: true,
       atBottom: true,
-      _bannerEligible: false,
-      _bannerTimer: null,
-      _activityTimer: null,
       _scrollRafPending: false,
     };
   },
@@ -268,8 +222,6 @@ export default {
         this.chatStore.fetchProviders();
         this.chatStore.fetchDefaultModel().then(() => this.loadDefaultModel());
         this.chatStore.fetchCommands();
-        // Start polling active sessions for reload resilience
-        this.startActiveSessionPolling();
         // Focus the chat input after DOM settles
         setTimeout(() => this.focusChatInput(), 200);
       } else this.$router.push("/login");
@@ -277,8 +229,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.onResize);
-    this.stopActiveSessionPolling();
-    this.stopActivityPolling();
   },
   watch: {
     "sessionsStore.currentSessionId"(newId, oldId) {
@@ -290,26 +240,11 @@ export default {
       if (!newId) {
         this.loadDefaultModel();
       }
-      // Clear reconnecting banner debounce on session switch
-      this._resetBannerDebounce();
       // Focus the input after a short delay to let the DOM settle
       setTimeout(() => this.focusChatInput(), 100);
-      this._resetBannerDebounce();
     },
     "sessionsStore.showCrons"() {
       this.sessionsStore.loadSessions();
-    },
-    /** Reset banner debounce when a new stream starts for the current session. */
-    "currentStream.sending"(v) {
-      if (v) this._resetBannerDebounce();
-    },
-    /** Sync activity polling with banner visibility. */
-    showReconnectingBanner(v) {
-      if (v) {
-        this.startActivityPolling();
-      } else {
-        this.stopActivityPolling();
-      }
     },
   },
   updated() {
@@ -536,100 +471,12 @@ export default {
         await this.chatStore.abortStream(sid);
       }
     },
-    /** Reset reconnecting-banner debounce timer. */
-    _resetBannerDebounce() {
-      this._bannerEligible = false;
-      if (this._bannerTimer) {
-        clearTimeout(this._bannerTimer);
-        this._bannerTimer = null;
-      }
-      this.stopActivityPolling();
-    },
-    /** Start polling for active sessions (for reload resilience). */
-    startActiveSessionPolling() {
-      this.stopActiveSessionPolling();
-      this._activeSessionTimer = setInterval(() => {
-        this.chatStore.fetchActiveSessions();
-      }, 3000);
-      // Also fetch immediately
-      this.chatStore.fetchActiveSessions();
-    },
-    /** Poll agent activity for the current session (for reload banner). */
-    _pollCurrentActivity() {
-      const sid = this.sessionsStore.currentSessionId;
-      if (!sid) return;
-      if (!this.chatStore.isSessionActive(sid)) return;
-      // Don't poll if we have a local stream going
-      const state = this.chatStore.getStreamState(sid);
-      if (state.sending) return;
-      // Don't poll if the session just completed locally
-      if (this.chatStore.locallyCompletedSessions.has(sid)) return;
-      this.chatStore.fetchAgentActivity(sid);
-    },
-    /** Start polling for per-session activity (triggered when banner shows). */
-    startActivityPolling() {
-      this.stopActivityPolling();
-      // Poll more frequently for live activity updates
-      this._activityTimer = setInterval(() => {
-        this._pollCurrentActivity();
-      }, 2000);
-      this._pollCurrentActivity();
-    },
-    /** Stop polling for per-session activity. */
-    stopActivityPolling() {
-      if (this._activityTimer) {
-        clearInterval(this._activityTimer);
-        this._activityTimer = null;
-      }
-    },
-    /** Stop polling for active sessions. */
-    stopActiveSessionPolling() {
-      if (this._activeSessionTimer) {
-        clearInterval(this._activeSessionTimer);
-        this._activeSessionTimer = null;
-      }
-    },
   },
   computed: {
     /** Per-session streaming state for the currently viewed session. */
     currentStream() {
       const sid = this.sessionsStore.currentSessionId;
       return this.chatStore.getStreamState(sid);
-    },
-    showReconnectingBanner() {
-      const sid = this.sessionsStore.currentSessionId;
-      if (!sid) return false;
-      const state = this.chatStore.getStreamState(sid);
-      if (state.sending) return false;
-      // Don't show banner if we just finished a stream locally (5s window).
-      if (this.chatStore.locallyCompletedSessions.has(sid)) return false;
-      // 3s debounce: only show after the session has been active without
-      // a local stream for at least 3 seconds. This handles page reloads
-      // where the backend still reports the session as active.
-      if (!this._bannerEligible) {
-        if (this.chatStore.isSessionActive(sid)) {
-          if (!this._bannerTimer) {
-            this._bannerTimer = setTimeout(() => {
-              this._bannerEligible = true
-              this._bannerTimer = null
-            }, 3000)
-          }
-        } else {
-          // No longer active — cancel pending timer
-          if (this._bannerTimer) {
-            clearTimeout(this._bannerTimer)
-            this._bannerTimer = null
-          }
-        }
-        return false
-      }
-      return this.chatStore.isSessionActive(sid);
-    },
-    /** Activity metadata for the reconnecting banner. */
-    reconnectingActivity() {
-      const sid = this.sessionsStore.currentSessionId
-      if (!sid) return {}
-      return this.chatStore.agentActivity[sid] || {}
     },
   },
 };
