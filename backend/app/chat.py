@@ -41,6 +41,117 @@ _agent_activity_lock = _threading.Lock()
 _stop_events: dict[str, asyncio.Event] = {}
 _stop_events_lock = asyncio.Lock()
 
+# Per-session usage snapshots — captured when an agent finishes so that
+# resumed sessions can still report token counts via /usage without
+# needing the original AIAgent object (which is cleaned up after streaming).
+# Keyed by real Hermes session ID.
+_usage_snapshots: dict[str, dict] = {}
+_usage_snapshots_lock = _threading.Lock()
+
+# Per-session persistent HermesCLI instances — created on first slash command
+# and reused for subsequent ones so commands like /usage see the real agent
+# state (token counts, compressor stats, etc.) instead of a fresh one.
+# Keyed by real Hermes session ID. Protected by a threading lock since
+# CLI operations run in a thread executor.
+_session_clis: dict[str, "HermesCLI"] = {}
+_session_clis_lock = _threading.Lock()
+_session_cli_timestamps: dict[str, float] = {}  # last-used time per CLI
+_SESSION_CLI_TTL = 1800  # 30 minutes idle before cleanup
+
+
+def _get_or_create_cli(session_id: str, model: str) -> "HermesCLI":
+    """Return an existing HermesCLI for *session_id* or create a new one."""
+    from cli import HermesCLI
+
+    with _session_clis_lock:
+        cli = _session_clis.get(session_id)
+        if cli is not None:
+            _session_cli_timestamps[session_id] = time.time()
+            return cli
+
+        cli = HermesCLI(
+            model=model,
+            compact=True,
+            resume=session_id,
+            verbose=False,
+        )
+        # Replace the Rich console with a dummy — we capture output via
+        # io.StringIO at dispatch time, not during construction.
+        from rich.console import Console
+        cli.console = Console(file=io.StringIO(), force_terminal=True, width=120)
+        _session_clis[session_id] = cli
+        _session_cli_timestamps[session_id] = time.time()
+
+        # Restore usage data from the session DB so commands like /usage
+        # work on resumed sessions without needing to send a message first.
+        # The DB stores input_tokens, output_tokens, etc. per session.
+        try:
+            snap = _usage_snapshots.get(session_id)
+            if not snap:
+                db_session = get_db().get_session(session_id)
+                if db_session:
+                    inp = db_session.get("input_tokens", 0) or 0
+                    out = db_session.get("output_tokens", 0) or 0
+                    if inp > 0 or out > 0:
+                        snap = {
+                            "session_api_calls": 1,
+                            "session_input_tokens": inp,
+                            "session_output_tokens": out,
+                            "session_cache_read_tokens": db_session.get("cache_read_tokens", 0) or 0,
+                            "session_cache_write_tokens": db_session.get("cache_write_tokens", 0) or 0,
+                            "session_reasoning_tokens": db_session.get("reasoning_tokens", 0) or 0,
+                            "model": db_session.get("model", ""),
+                        }
+                        _usage_snapshots[session_id] = snap
+            if snap:
+                cli._init_agent()
+                if cli.agent:
+                    logger.info(
+                        "Restored usage to CLI %s: api_calls=%d inp=%d out=%d",
+                        session_id, snap.get("session_api_calls", 0),
+                        snap.get("session_input_tokens", 0),
+                        snap.get("session_output_tokens", 0),
+                    )
+                    for attr in (
+                        "session_api_calls", "session_input_tokens",
+                        "session_output_tokens", "session_cache_read_tokens",
+                        "session_cache_write_tokens", "session_reasoning_tokens",
+                    ):
+                        setattr(cli.agent, attr, snap.get(attr, 0))
+                    if snap.get("model"):
+                        cli.agent.model = snap["model"]
+        except Exception as e:
+            logger.warning("Failed to restore usage from DB for %s: %s", session_id, e)
+
+        return cli
+
+
+def _remove_cli(session_id: str) -> None:
+    """Remove a CLI from the registry."""
+    with _session_clis_lock:
+        _session_clis.pop(session_id, None)
+        _session_cli_timestamps.pop(session_id, None)
+
+
+async def _cleanup_stale_clis():
+    """Periodically remove CLIs that haven't been touched in _SESSION_CLI_TTL."""
+    while True:
+        try:
+            await asyncio.sleep(600)  # Every 10 minutes
+            cutoff = time.time() - _SESSION_CLI_TTL
+            with _session_clis_lock:
+                stale = [sid for sid, ts in _session_cli_timestamps.items() if ts < cutoff]
+                for sid in stale:
+                    _session_clis.pop(sid, None)
+                    _session_cli_timestamps.pop(sid, None)
+                    _usage_snapshots.pop(sid, None)
+                if stale:
+                    logger.debug("Cleaned up %d stale CLI instances", len(stale))
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+
 
 # Periodic cleanup task that removes orphaned stop events
 # (events older than 10 minutes with no active agent or session).
@@ -65,6 +176,7 @@ async def _cleanup_orphaned_stop_events():
 
 # Start cleanup on import (the asyncio loop must be running — safe for FastAPI)
 _threading.Thread(target=lambda: asyncio.run(_cleanup_orphaned_stop_events()), daemon=True).start()
+_threading.Thread(target=lambda: asyncio.run(_cleanup_stale_clis()), daemon=True).start()
 
 
 class ChatRequest(BaseModel):
@@ -97,9 +209,8 @@ async def _run_cli_command(
 ) -> None:
     """Dispatch a slash command through HermesCLI.process_command() generically.
 
-    Exactly like tui_gateway/slash_worker.py — creates a lightweight
-    HermesCLI, calls process_command(), captures text output, streams
-    it back. Works for ALL commands: built-in, skills, plugins.
+    Uses a persistent HermesCLI per session (created lazily) so commands
+    like /usage see the real agent state instead of a fresh one.
     """
     loop = asyncio.get_event_loop()
     try:
@@ -107,21 +218,14 @@ async def _run_cli_command(
             import io
             import contextlib
             import cli as cli_mod
-            from cli import HermesCLI
             from rich.console import Console
 
             sid = req.session_id
-            cli = HermesCLI(
-                model=req.model or default_model(),
-                compact=True,
-                resume=sid if sid else None,
-                verbose=False,
-            )
+            cli = _get_or_create_cli(sid, req.model or default_model())
 
             buf = io.StringIO()
-            # Rich Console captures its file handle at construction time, so
-            # contextlib.redirect_stdout won't affect it. Swap the console's
-            # underlying file to our buffer so self.console.print() is captured.
+            # Swap the CLI's console to our buffer for output capture
+            old_console = cli.console
             cli.console = Console(file=buf, force_terminal=True, width=120)
 
             # Also redirect _cprint (prompt_toolkit output) to plain print()
@@ -133,18 +237,50 @@ async def _run_cli_command(
             if not cmd.startswith("/"):
                 cmd = f"/{cmd}"
 
+            # Ensure the agent is initialized before dispatching
+            try:
+                cli._init_agent()
+            except Exception:
+                pass  # Non-fatal — some commands work fine without an agent
+
+            # If the CLI's agent has no usage data and we have a snapshot
+            # (e.g. this is a resumed session after restart), inject it.
+            cmd_lower = cmd.lstrip("/").lower()
+            if sid and cmd_lower in ("usage", "insights") and cli.agent:
+                if not getattr(cli.agent, "session_api_calls", 0):
+                    with _usage_snapshots_lock:
+                        snap = _usage_snapshots.get(sid)
+                    if snap:
+                        for attr in (
+                            "session_api_calls", "session_input_tokens",
+                            "session_output_tokens", "session_cache_read_tokens",
+                            "session_cache_write_tokens", "session_reasoning_tokens",
+                            "session_prompt_tokens", "session_completion_tokens",
+                            "session_total_tokens",
+                        ):
+                            setattr(cli.agent, attr, snap.get(attr, 0))
+                        if snap.get("session_api_calls", 0) > 0 and not cli.agent.session_api_calls:
+                            cli.agent.session_api_calls = snap["session_api_calls"]
+                        if snap.get("model"):
+                            cli.agent.model = snap["model"]
+                        compressor = getattr(cli.agent, "context_compressor", None)
+                        if compressor:
+                            compressor.last_prompt_tokens = snap.get("last_prompt_tokens", 0)
+                            compressor.context_length = snap.get("context_length", 0)
+                            compressor.compression_count = snap.get("compression_count", 0)
+
             try:
                 with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
                     cli.process_command(cmd)
             finally:
+                # Restore the CLI's console
+                cli.console = old_console
                 if old is not None:
                     cli_mod._cprint = old
 
             output = buf.getvalue().rstrip()
 
             # ── Post-dispatch DB persistence ────────────────────────
-            # /model <name> — persist to session DB so the model badge
-            # shows the new model after the stream completes.
             if sid and cmd.startswith("/model ") and " " in cmd:
                 model_name = cmd.split(None, 1)[1].strip().split()[0]
                 if model_name:
@@ -470,6 +606,61 @@ async def chat_stream(req: ChatRequest):
         finally:
             if agent:
                 real_sid = agent.session_id or ""
+                # ── Sync the real agent into the persistent CLI ──────────
+                # So commands like /usage see real token counts, compressor
+                # stats, conversation history, etc. without snapshot hacks.
+                if real_sid:
+                    try:
+                        api_calls = getattr(agent, "session_api_calls", 0) or 0
+                        # ── Snapshot usage for backend restarts ──────────
+                        compressor = getattr(agent, "context_compressor", None)
+                        with _usage_snapshots_lock:
+                            _usage_snapshots[real_sid] = {
+                                "session_api_calls": api_calls,
+                                "session_input_tokens": getattr(agent, "session_input_tokens", 0) or 0,
+                                "session_output_tokens": getattr(agent, "session_output_tokens", 0) or 0,
+                                "session_cache_read_tokens": getattr(agent, "session_cache_read_tokens", 0) or 0,
+                                "session_cache_write_tokens": getattr(agent, "session_cache_write_tokens", 0) or 0,
+                                "session_reasoning_tokens": getattr(agent, "session_reasoning_tokens", 0) or 0,
+                                "session_prompt_tokens": getattr(agent, "session_prompt_tokens", 0) or 0,
+                                "session_completion_tokens": getattr(agent, "session_completion_tokens", 0) or 0,
+                                "session_total_tokens": getattr(agent, "session_total_tokens", 0) or 0,
+                                "model": getattr(agent, "model", ""),
+                                "last_prompt_tokens": getattr(compressor, "last_prompt_tokens", 0) or 0,
+                                "context_length": getattr(compressor, "context_length", 0) or 0,
+                                "compression_count": getattr(compressor, "compression_count", 0) or 0,
+                            }
+                        logger.info(
+                            "Usage sync: session=%s api_calls=%d model=%s",
+                            real_sid, api_calls, getattr(agent, "model", "?")
+                        )
+                        with _session_clis_lock:
+                            cli = _session_clis.get(real_sid)
+                            if cli is None:
+                                # No CLI exists yet — create one eagerly so
+                                # the real agent is available for future
+                                # slash commands like /usage.
+                                from cli import HermesCLI
+                                cli = HermesCLI(
+                                    model=getattr(agent, "model", ""),
+                                    compact=True,
+                                    resume=real_sid,
+                                    verbose=False,
+                                )
+                                from rich.console import Console
+                                cli.console = Console(
+                                    file=io.StringIO(),
+                                    force_terminal=True,
+                                    width=120,
+                                )
+                                _session_clis[real_sid] = cli
+                            cli.agent = agent
+                            cli.conversation_history = getattr(
+                                agent, "conversation_history", []
+                            ) or []
+                            _session_cli_timestamps[real_sid] = time.time()
+                    except Exception:
+                        pass
                 async with _active_agents_lock:
                     if real_sid:
                         _active_agents.pop(real_sid, None)
