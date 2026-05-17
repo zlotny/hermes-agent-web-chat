@@ -26,7 +26,7 @@ HERMES_SRC = os.path.expanduser(
 # ---------------------------------------------------------------------------
 AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "changeme")
 PASSWORD_HASH = hashlib.sha256(AUTH_PASSWORD.encode()).hexdigest()
-TOKEN_EXPIRY = timedelta(hours=24)
+TOKEN_EXPIRY = timedelta(days=7)
 
 # ---------------------------------------------------------------------------
 # Feature flags
