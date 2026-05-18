@@ -71,6 +71,25 @@
       <!-- Divider -->
       <div class="border-t border-border mx-3"></div>
 
+      <!-- Show system messages toggle -->
+      <div
+        class="flex items-center justify-between px-3 py-2 hover:bg-hover-bg cursor-pointer transition-colors"
+        @click="sessionsStore.showSystemMessages = !sessionsStore.showSystemMessages"
+        title="Show system prompts, memory reviews, and other agent-injected messages"
+      >
+        <span class="text-xs">Show system messages</span>
+        <div
+          :class="['w-8 h-4 rounded-full transition-colors relative', sessionsStore.showSystemMessages ? 'bg-accent' : 'bg-border']"
+        >
+          <div
+            :class="['w-3 h-3 rounded-full bg-white absolute top-0.5 transition-transform shadow-sm', sessionsStore.showSystemMessages ? 'translate-x-4' : 'translate-x-0.5']"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="border-t border-border mx-3"></div>
+
       <!-- Edit core files -->
       <div
         class="flex items-center justify-between px-3 py-2 hover:bg-hover-bg cursor-pointer transition-colors"

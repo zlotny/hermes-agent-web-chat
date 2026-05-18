@@ -8,7 +8,14 @@ from typing import Optional
 _SYSTEM_CONTENT_PREFIXES = (
     "[IMPORTANT:",
     "Review the conversation above",
+    "Review the conversation",
     "System:",
+    "You are a helpful assistant",
+    "You are Hermes",
+    "Hermes Agent",
+    "You are an expert",
+    "Today is",
+    "Current date",
 )
 _SYSTEM_CONTENT_EXACT = frozenset({"[SILENT]"})
 
@@ -32,7 +39,9 @@ def tag_message_source(msg: dict) -> dict:
     if "source" in msg:
         return msg
     role = msg.get("role", "")
-    if role == "user":
+    if role == "system":
+        msg["source"] = "system"
+    elif role == "user":
         msg["source"] = "system" if is_system_content(msg.get("content", "")) else "user"
     elif role == "assistant":
         msg["source"] = "assistant"

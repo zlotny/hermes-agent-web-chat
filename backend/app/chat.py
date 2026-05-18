@@ -700,9 +700,22 @@ async def chat_stream(req: ChatRequest):
         try:
             from run_agent import AIAgent
 
+            # Set TERMINAL_CWD so context file scanning, file tools, and
+            # terminal tools use the correct working directory.  Also
+            # chdir() there so build_environment_hints() (which calls
+            # os.getcwd()) shows the right path in the system prompt.
+            # Configurable via HERMES_TERMINAL_CWD env var; defaults to
+            # the user's home directory instead of the backend's
+            # systemd WorkingDirectory.
+            _default_cwd = os.path.expanduser("~")
+            _target_cwd = os.environ.get("HERMES_TERMINAL_CWD", _default_cwd)
+            os.environ["TERMINAL_CWD"] = _target_cwd
+            try:
+                os.chdir(_target_cwd)
+            except OSError:
+                logger.warning("Could not chdir to %s, using current dir", _target_cwd)
+
             # Set HERMES_INTERACTIVE so gated tools (cronjob, approval)
-            # are available — the CLI always sets this (cli.py:14001).
-            os.environ.setdefault("HERMES_INTERACTIVE", "1")
 
             # Resolve enabled toolsets from config (same as CLI does),
             # so the web chat doesn't show tools that are off by default

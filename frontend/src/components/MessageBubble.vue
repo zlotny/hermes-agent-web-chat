@@ -1,4 +1,15 @@
 <template>
+  <!-- System message (role='system' from DB) -->
+  <div
+    v-if="message.role === 'system'"
+    class="flex justify-center animate-fade-in"
+  >
+    <div class="max-w-[90%]">
+      <div class="text-[11px] font-semibold text-[#d4a853]/80 uppercase tracking-wider mb-1 text-center">System prompt</div>
+      <div class="bg-[#d4a853]/5 border border-[#d4a853]/20 px-4 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d4a853]/70 markdown-content" v-html="renderedContent"></div>
+    </div>
+  </div>
+
   <!-- User message (real) -->
   <div
     v-if="message.role === 'user' && message.source !== 'system' && !isSystemMsg"
@@ -25,16 +36,14 @@
     </div>
   </div>
 
-  <!-- System message -->
+  <!-- System message (user-role with system content) -->
   <div
     v-if="message.role === 'user' && (message.source === 'system' || isSystemMsg)"
     class="flex justify-center animate-fade-in"
   >
     <div class="max-w-[90%]">
       <div class="text-[11px] font-semibold text-[#d4a853]/80 uppercase tracking-wider mb-1 text-center">System</div>
-      <div class="bg-[#d4a853]/5 border border-[#d4a853]/20 px-4 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d4a853]/70">
-        {{ message.content }}
-      </div>
+      <div class="bg-[#d4a853]/5 border border-[#d4a853]/20 px-4 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words text-[#d4a853]/70 markdown-content" v-html="renderedContent"></div>
     </div>
   </div>
 

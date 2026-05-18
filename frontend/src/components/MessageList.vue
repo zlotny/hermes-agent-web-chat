@@ -53,6 +53,8 @@ export default {
     /** Filter chat-friendly messages, then group consecutive tool-only messages. */
     displayGroups() {
       const filtered = this.messages.filter((m) => {
+        // Allow system-role messages only when toggled on
+        if (m.role === 'system') return this.showSystemMessages
         if (m.role !== 'user' && m.role !== 'assistant') return false
         // Use source field when available, fall back to content patterns
         if (m.source === 'system' && !this.showSystemMessages) return false

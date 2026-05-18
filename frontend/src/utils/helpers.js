@@ -8,16 +8,25 @@
 const _SYSTEM_CONTENT_PREFIXES = [
   "[IMPORTANT:",
   "Review the conversation above",
+  "Review the conversation",
   "System:",
+  "You are a helpful assistant",
+  "You are Hermes",
+  "Hermes Agent",
+  "You are an expert",
+  "Today is",
+  "Current date",
 ]
 const _SYSTEM_CONTENT_EXACT = new Set(["[SILENT]"])
 
 /**
  * Check if a message object or content string looks like a system-injected message.
- * Accepts either a message object ({ content, source }) or a plain string.
+ * Accepts either a message object ({ content, source, role }) or a plain string.
  */
 export function isSystemMsg(msg) {
   if (!msg) return false
+  // If the raw DB role is "system", it's a system message
+  if (typeof msg === "object" && msg.role === "system") return true
   const content = typeof msg === "string" ? msg : msg.content
   if (!content) return false
   if (typeof msg === "object" && msg.source === "system") return true

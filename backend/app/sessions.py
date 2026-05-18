@@ -130,6 +130,18 @@ async def get_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     messages = db.get_messages(session_id)
     messages = [tag_message_source(m) for m in messages]
+
+    # If the session has a stored system prompt, inject it as a synthetic
+    # message at the beginning (role=system, source=system) so the frontend
+    # can display it when "show system messages" is toggled on.
+    system_prompt = session.get("system_prompt", "")
+    if system_prompt:
+        messages.insert(0, {
+            "role": "system",
+            "source": "system",
+            "content": system_prompt,
+        })
+
     # Build title for sidebar display.
     # db.get_session() doesn't include preview — only list_sessions_rich does.
     # So compute title from the first user message content.
