@@ -6,6 +6,7 @@ import asyncio
 import io
 import contextlib
 import logging
+import os
 import time
 import uuid as _uuid
 from typing import AsyncGenerator, Optional
@@ -698,6 +699,10 @@ async def chat_stream(req: ChatRequest):
         agent = None
         try:
             from run_agent import AIAgent
+
+            # Set HERMES_INTERACTIVE so gated tools (cronjob, approval)
+            # are available — the CLI always sets this (cli.py:14001).
+            os.environ.setdefault("HERMES_INTERACTIVE", "1")
 
             # Resolve enabled toolsets from config (same as CLI does),
             # so the web chat doesn't show tools that are off by default
