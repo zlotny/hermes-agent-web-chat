@@ -699,6 +699,20 @@ async def chat_stream(req: ChatRequest):
         try:
             from run_agent import AIAgent
 
+            # Resolve enabled toolsets from config (same as CLI does),
+            # so the web chat doesn't show tools that are off by default
+            # (e.g. mixture_of_agents, feishu_*, spotify, discord, etc.).
+            _enabled_toolsets = None
+            try:
+                from hermes_cli.tools_config import _get_platform_tools
+                from hermes_cli.config import load_config
+                _cfg = load_config()
+                _enabled = _get_platform_tools(_cfg, "cli")
+                if _enabled:
+                    _enabled_toolsets = sorted(_enabled)
+            except Exception:
+                pass
+
             agent = AIAgent(
                 model=effective_model,
                 session_id=agent_session_id,  # None for new chats → auto-generate Hermes ID
@@ -707,6 +721,7 @@ async def chat_stream(req: ChatRequest):
                 tool_complete_callback=on_tool_complete,
                 status_callback=on_status,
                 clarify_callback=_make_clarify_callback(stream_sid, q, result_holder),
+                enabled_toolsets=_enabled_toolsets,
                 quiet_mode=True,
                 verbose_logging=False,
                 session_db=get_db(),
