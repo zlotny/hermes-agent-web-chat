@@ -245,6 +245,7 @@ export const useChatStore = defineStore('chat', () => {
     }, 5000)
     // Remove per-session stream state
     _removeStream(sessionId)
+    clarifyPending.value = null
   }
 
   async function fetchActiveSessions() {
@@ -469,6 +470,10 @@ export const useChatStore = defineStore('chat', () => {
               }, 1200)
             }
 
+            if (d.clarify_pending) {
+              _handleClarifyPending(d.clarify_pending)
+            }
+
             if (d.status) {
               state.statusDetail = d.status
             }
@@ -511,6 +516,49 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Clarify — interactive question/answer mid-stream
+  // ---------------------------------------------------------------------------
+
+  const clarifyPending = ref(null)  // { clarify_id, question, choices } or null
+
+  function _handleClarifyPending(payload) {
+    clarifyPending.value = {
+      clarify_id: payload.clarify_id,
+      question: payload.question,
+      choices: payload.choices || null,
+    }
+  }
+
+  async function resolveClarify(clarifyId, answer) {
+    if (!clarifyId) return
+    // Clear the pending state immediately so the dialog disappears
+    clarifyPending.value = null
+    try {
+      await fetch('/api/chat/clarify/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ clarify_id: clarifyId, answer }),
+      })
+    } catch (e) {
+      console.warn('Failed to resolve clarify:', e)
+    }
+  }
+
+  async function checkPendingClarify(sessionId) {
+    if (!sessionId) return
+    try {
+      const res = await fetch(`/api/chat/clarify/pending/${encodeURIComponent(sessionId)}`, {
+        credentials: 'same-origin',
+      })
+      if (res.ok) {
+        const data = await res.json()
+        clarifyPending.value = data
+      }
+    } catch {}
+  }
+
   return {
     // stream tracking
     currentStreamingId,
@@ -534,6 +582,10 @@ export const useChatStore = defineStore('chat', () => {
     activeStreamIds,
     // per-session stream state accessor
     getStreamState,
+    // clarify
+    clarifyPending,
+    resolveClarify,
+    checkPendingClarify,
     // helpers
     isSystemMsg,
     toolArgPreview,

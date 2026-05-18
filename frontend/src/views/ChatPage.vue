@@ -179,6 +179,15 @@
         </div>
       </div>
     </main>
+
+    <!-- Clarify dialog (rendered via Teleport to body) -->
+    <ClarifyDialog
+      :show="!!chatStore.clarifyPending"
+      :question="chatStore.clarifyPending?.question || ''"
+      :choices="chatStore.clarifyPending?.choices || null"
+      @resolve="onClarifyResolve"
+      @cancel="onClarifyCancel"
+    />
   </div>
 </template>
 
@@ -190,9 +199,10 @@ import SessionSidebar from "../components/SessionSidebar.vue";
 import MessageList from "../components/MessageList.vue";
 import EmptyState from "../components/EmptyState.vue";
 import ChatInput from "../components/ChatInput.vue";
+import ClarifyDialog from "../components/ClarifyDialog.vue";
 
 export default {
-  components: { SessionSidebar, MessageList, EmptyState, ChatInput },
+  components: { SessionSidebar, MessageList, EmptyState, ChatInput, ClarifyDialog },
   setup() {
     return {
       sessionsStore: useSessionsStore(),
@@ -469,6 +479,20 @@ export default {
       const sid = this.sessionsStore.currentSessionId;
       if (sid) {
         await this.chatStore.abortStream(sid);
+      }
+    },
+    /** Handle clarify response from the user. */
+    onClarifyResolve(answer) {
+      const cp = this.chatStore.clarifyPending;
+      if (cp && cp.clarify_id) {
+        this.chatStore.resolveClarify(cp.clarify_id, answer);
+      }
+    },
+    onClarifyCancel() {
+      // Send empty string to unblock the agent with no answer
+      const cp = this.chatStore.clarifyPending;
+      if (cp && cp.clarify_id) {
+        this.chatStore.resolveClarify(cp.clarify_id, '');
       }
     },
   },

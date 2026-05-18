@@ -7,6 +7,7 @@ import io
 import contextlib
 import logging
 import time
+import uuid as _uuid
 from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter
@@ -45,6 +46,117 @@ _agent_activity_lock = _threading.Lock()
 # NOT persisted to the DB or shared with Hermes internals.
 _chat_transients: dict[str, dict] = {}
 _chat_transients_lock = _threading.Lock()
+
+# =========================================================================
+# Clarify support — bridges the blocking clarify_callback (agent thread)
+# to the async REST API (frontend). Uses Hermes' clarify_gateway module
+# which provides thread-safe Event-based state management.
+# =========================================================================
+
+
+def _make_clarify_callback(
+    stream_sid: str,
+    q: _queue.Queue,
+    result_holder: dict,
+) -> callable:
+    """Return a ``clarify_callback`` for AIAgent that works over SSE + REST.
+
+    When the model calls the ``clarify`` tool, this callback:
+
+    1. Generates a unique ``clarify_id`` and registers the pending request
+       with ``clarify_gateway`` (thread-safe Event-based wait).
+    2. Pushes a ``clarify_pending`` event into the SSE queue so the
+       frontend can display a question dialog.
+    3. **Blocks** the agent thread on ``wait_for_response()`` until the
+       user submits an answer via ``POST /api/chat/clarify/resolve``.
+    4. Returns the user's response to the agent as JSON.
+    """
+
+    def _cb(question: str, choices: list[str] | None = None) -> str:
+        cid = _uuid.uuid4().hex[:12]
+        try:
+            from tools.clarify_gateway import register as _register_clarify
+            from tools.clarify_gateway import wait_for_response as _wait_clarify
+        except ImportError:
+            logger.error("clarify_gateway module not available")
+            return json.dumps({"error": "Clarify tool is not available in this environment."})
+
+        # Use the real Hermes session ID if available, fall back to stream_sid
+        session_key = result_holder.get("session_id", "") or stream_sid
+
+        _register_clarify(
+            clarify_id=cid,
+            session_key=session_key,
+            question=question,
+            choices=choices,
+        )
+        # Notify frontend via SSE
+        q.put_nowait((
+            "clarify_pending",
+            {
+                "clarify_id": cid,
+                "question": question,
+                "choices": choices,
+            },
+        ))
+
+        # Block agent thread until user responds (10 min timeout)
+        result = _wait_clarify(clarify_id=cid, timeout=600.0)
+        if result is None:
+            return json.dumps({"error": "Clarify request timed out or was cancelled."})
+        return json.dumps({
+            "question": question,
+            "choices_offered": choices,
+            "user_response": result,
+        }, ensure_ascii=False)
+
+    return _cb
+
+
+@router.post("/api/chat/clarify/resolve")
+async def resolve_clarify(body: dict):
+    """Resolve a pending clarify request with the user's answer.
+
+    The frontend calls this when the user submits a response to a
+    clarify question.  It unblocks the blocked agent thread via
+    ``clarify_gateway.resolve_gateway_clarify()``.
+    """
+    clarify_id = (body or {}).get("clarify_id", "")
+    answer = (body or {}).get("answer", "")
+    if not clarify_id:
+        return JSONResponse(status_code=400, content={"error": "clarify_id is required"})
+    try:
+        from tools.clarify_gateway import resolve_gateway_clarify
+    except ImportError:
+        return JSONResponse(status_code=500, content={"error": "clarify_gateway not available"})
+    ok = resolve_gateway_clarify(clarify_id, answer)
+    if not ok:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Clarify request not found or already expired"},
+        )
+    return {"ok": True}
+
+
+@router.get("/api/chat/clarify/pending/{session_id}")
+async def get_pending_clarify(session_id: str):
+    """Return the oldest pending clarify request for a session, or 404.
+
+    Used by the frontend to check for pending clarify questions after a
+    page reload.
+    """
+    try:
+        from tools.clarify_gateway import get_pending_for_session
+    except ImportError:
+        return JSONResponse(status_code=500, content={"error": "clarify_gateway not available"})
+    entry = get_pending_for_session(session_id)
+    if entry is None:
+        return JSONResponse(status_code=404, content={"error": "No pending clarify"})
+    return {
+        "clarify_id": entry.clarify_id,
+        "question": entry.question,
+        "choices": entry.choices,
+    }
 
 
 @router.get("/api/chat/transient/{session_id}")
@@ -411,6 +523,15 @@ async def stop_chat(session_id: str):
     with _agent_activity_lock:
         _agent_activity.pop(session_id, None)
 
+    # 4) Resolve any pending clarify — unblock the agent thread
+    try:
+        from tools.clarify_gateway import get_pending_for_session, resolve_gateway_clarify
+        entry = get_pending_for_session(session_id)
+        if entry is not None:
+            resolve_gateway_clarify(entry.clarify_id, "")
+    except Exception:
+        pass
+
     return {"ok": True, "session_id": session_id}
 
 
@@ -585,6 +706,7 @@ async def chat_stream(req: ChatRequest):
                 tool_progress_callback=on_tool_progress,
                 tool_complete_callback=on_tool_complete,
                 status_callback=on_status,
+                clarify_callback=_make_clarify_callback(stream_sid, q, result_holder),
                 quiet_mode=True,
                 verbose_logging=False,
                 session_db=get_db(),
@@ -726,6 +848,14 @@ async def chat_stream(req: ChatRequest):
                 with _agent_activity_lock:
                     if real_sid:
                         _agent_activity.pop(real_sid, None)
+            # Resolve any leftover pending clarify for this session
+            try:
+                from tools.clarify_gateway import get_pending_for_session, resolve_gateway_clarify
+                entry = get_pending_for_session(real_sid or stream_sid)
+                if entry is not None:
+                    resolve_gateway_clarify(entry.clarify_id, "")
+            except Exception:
+                pass
             q.put_nowait(("done", None))
 
     # ------------------------------------------------------------------
@@ -765,6 +895,8 @@ async def chat_stream(req: ChatRequest):
                     yield f"data: {json.dumps({'tool_start': payload['name'], 'tool_preview': payload['preview']})}\n\n"
                 elif kind == "tool_complete":
                     yield f"data: {json.dumps({'tool_complete': payload['name'], 'tool_result': payload['preview'], 'tool_args': payload['args']})}\n\n"
+                elif kind == "clarify_pending":
+                    yield f"data: {json.dumps({'clarify_pending': payload})}\n\n"
                 elif kind == "status":
                     yield f"data: {json.dumps({'status': payload['message']})}\n\n"
                 elif kind == "error":

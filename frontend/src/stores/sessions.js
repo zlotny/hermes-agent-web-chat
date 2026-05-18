@@ -139,6 +139,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       // Also check for transient state (in-flight message not yet in DB).
       // After loading DB messages, check for transient in-flight state
       _checkTransientState(id)
+      chatStore.checkPendingClarify(id)
 
       if (data.model) {
         chatStore.setCurrentModel(data.model)
