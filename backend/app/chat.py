@@ -716,6 +716,8 @@ async def chat_stream(req: ChatRequest):
                 logger.warning("Could not chdir to %s, using current dir", _target_cwd)
 
             # Set HERMES_INTERACTIVE so gated tools (cronjob, approval)
+            # are available — the CLI always sets this (cli.py:14001).
+            os.environ.setdefault("HERMES_INTERACTIVE", "1")
 
             # Resolve enabled toolsets from config (same as CLI does),
             # so the web chat doesn't show tools that are off by default
@@ -743,7 +745,7 @@ async def chat_stream(req: ChatRequest):
                 quiet_mode=True,
                 verbose_logging=False,
                 session_db=get_db(),
-                platform="web",  # Tag sessions as "web" source
+                platform="cli",  # Use "cli" so cronjob, skills, etc. are fully available
             )
 
             # Track under BOTH keys: the frontend's temp key AND the
